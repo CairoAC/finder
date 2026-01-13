@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, List, ListItem, Padding, Paragraph, Wrap},
     Frame,
 };
 
@@ -19,7 +19,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
 }
 
 fn calc_input_height(text_len: usize, width: u16) -> u16 {
-    let inner_width = width.saturating_sub(4) as usize;
+    let inner_width = width.saturating_sub(6) as usize;
     if inner_width == 0 {
         return 3;
     }
@@ -113,31 +113,29 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
 fn draw_search_input(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(DIM));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::horizontal(1));
 
     let text = format!("> {}_", app.query);
     let paragraph = Paragraph::new(text)
         .style(Style::default().fg(Color::White))
-        .wrap(Wrap { trim: false });
-    frame.render_widget(paragraph, inner);
+        .wrap(Wrap { trim: false })
+        .block(block);
+    frame.render_widget(paragraph, area);
 }
 
 fn draw_chat_input(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(DIM));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::horizontal(1));
 
     let text = format!("? {}_", app.chat_input);
     let paragraph = Paragraph::new(text)
         .style(Style::default().fg(Color::White))
-        .wrap(Wrap { trim: false });
-    frame.render_widget(paragraph, inner);
+        .wrap(Wrap { trim: false })
+        .block(block);
+    frame.render_widget(paragraph, area);
 }
 
 fn draw_results(frame: &mut Frame, area: Rect, app: &App) {
