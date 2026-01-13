@@ -18,12 +18,22 @@ pub fn draw(frame: &mut Frame, app: &App) {
     }
 }
 
+fn calc_input_height(text_len: usize, width: u16) -> u16 {
+    let inner_width = width.saturating_sub(4) as usize;
+    if inner_width == 0 {
+        return 3;
+    }
+    let lines = (text_len + 3) / inner_width + 1;
+    (lines as u16 + 2).max(3)
+}
+
 fn draw_search(frame: &mut Frame, app: &App) {
     let area = frame.area();
+    let input_height = calc_input_height(app.query.len(), area.width);
 
     let chunks = Layout::vertical([
         Constraint::Length(5),
-        Constraint::Length(3),
+        Constraint::Length(input_height),
         Constraint::Min(1),
     ])
     .split(area);
@@ -35,10 +45,11 @@ fn draw_search(frame: &mut Frame, app: &App) {
 
 fn draw_chat(frame: &mut Frame, app: &App) {
     let area = frame.area();
+    let input_height = calc_input_height(app.chat_input.len(), area.width);
 
     let chunks = Layout::vertical([
         Constraint::Length(5),
-        Constraint::Length(3),
+        Constraint::Length(input_height),
         Constraint::Min(1),
         Constraint::Length(3),
     ])
@@ -107,16 +118,10 @@ fn draw_search_input(frame: &mut Frame, area: Rect, app: &App) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let input_line = Line::from(vec![
-        Span::styled("> ", Style::default().fg(BLUE)),
-        Span::styled(&app.query, Style::default().fg(Color::White)),
-        Span::styled(
-            "_",
-            Style::default().fg(BLUE).add_modifier(Modifier::SLOW_BLINK),
-        ),
-    ]);
-
-    let paragraph = Paragraph::new(input_line);
+    let text = format!("> {}_", app.query);
+    let paragraph = Paragraph::new(text)
+        .style(Style::default().fg(Color::White))
+        .wrap(Wrap { trim: false });
     frame.render_widget(paragraph, inner);
 }
 
@@ -128,16 +133,10 @@ fn draw_chat_input(frame: &mut Frame, area: Rect, app: &App) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let input_line = Line::from(vec![
-        Span::styled("? ", Style::default().fg(BLUE)),
-        Span::styled(&app.chat_input, Style::default().fg(Color::White)),
-        Span::styled(
-            "_",
-            Style::default().fg(BLUE).add_modifier(Modifier::SLOW_BLINK),
-        ),
-    ]);
-
-    let paragraph = Paragraph::new(input_line);
+    let text = format!("? {}_", app.chat_input);
+    let paragraph = Paragraph::new(text)
+        .style(Style::default().fg(Color::White))
+        .wrap(Wrap { trim: false });
     frame.render_widget(paragraph, inner);
 }
 
