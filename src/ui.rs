@@ -19,7 +19,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
 }
 
 fn calc_input_height(text_len: usize, width: u16) -> u16 {
-    let inner_width = width.saturating_sub(10) as usize;
+    let inner_width = width.saturating_sub(4) as usize;
     if inner_width == 0 {
         return 3;
     }
@@ -114,7 +114,7 @@ fn draw_search_input(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(DIM))
-        .padding(Padding::horizontal(2));
+        .padding(Padding::horizontal(1));
 
     let text = format!("> {}_", app.query);
     let paragraph = Paragraph::new(text)
@@ -128,7 +128,7 @@ fn draw_chat_input(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(DIM))
-        .padding(Padding::horizontal(2));
+        .padding(Padding::horizontal(1));
 
     let text = format!("? {}_", app.chat_input);
     let paragraph = Paragraph::new(text)
@@ -141,7 +141,8 @@ fn draw_chat_input(frame: &mut Frame, area: Rect, app: &App) {
 fn draw_results(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(DIM));
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::horizontal(1));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -208,7 +209,8 @@ fn draw_results(frame: &mut Frame, area: Rect, app: &App) {
 fn draw_chat_response(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(DIM));
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::horizontal(1));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
