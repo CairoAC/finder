@@ -267,15 +267,17 @@ fn draw_chat_footer(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(block, area);
 
     let hints = if app.chat_streaming {
-        vec![Span::styled("streaming...", Style::default().fg(BLUE))]
+        vec![
+            Span::styled("streaming... ", Style::default().fg(BLUE)),
+            Span::styled("[Ctrl+C]", Style::default().fg(DIM)),
+            Span::styled(" cancel", Style::default().fg(DIM)),
+        ]
     } else {
         vec![
-            Span::styled("[f]", Style::default().fg(BLUE)),
+            Span::styled("[Alt+F]", Style::default().fg(BLUE)),
             Span::styled(" follow-up  ", Style::default().fg(DIM)),
             Span::styled("[Esc]", Style::default().fg(BLUE)),
-            Span::styled(" back to search  ", Style::default().fg(DIM)),
-            Span::styled("[q]", Style::default().fg(BLUE)),
-            Span::styled(" quit", Style::default().fg(DIM)),
+            Span::styled(" back", Style::default().fg(DIM)),
         ]
     };
 

@@ -101,10 +101,7 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                             _ => {}
                         },
                         Mode::Chat => match key.code {
-                            KeyCode::Esc => app.on_escape(),
-                            KeyCode::Char('q') if !app.chat_streaming => {
-                                app.should_quit = true;
-                            }
+                            KeyCode::Esc if !app.chat_streaming => app.on_escape(),
                             KeyCode::Enter => {
                                 if !app.chat_streaming
                                     && !app.chat_input.is_empty()
@@ -122,22 +119,26 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                                     });
                                 }
                             }
-                            KeyCode::Char('f') if !app.chat_streaming => {
+                            KeyCode::Char('f')
+                                if key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
+                                    && !app.chat_streaming =>
+                            {
                                 app.start_followup();
                             }
-                            KeyCode::Backspace => app.on_backspace(),
+                            KeyCode::Char('c')
+                                if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) =>
+                            {
+                                if app.chat_streaming {
+                                    app.cancel_streaming();
+                                } else {
+                                    app.on_escape();
+                                }
+                            }
+                            KeyCode::Backspace if !app.chat_streaming => app.on_backspace(),
                             KeyCode::Up => app.on_up(),
                             KeyCode::Down => app.on_down(visible_count),
-                            KeyCode::Char(c) => {
-                                if key
-                                    .modifiers
-                                    .contains(crossterm::event::KeyModifiers::CONTROL)
-                                    && c == 'c'
-                                {
-                                    app.on_escape();
-                                } else if !app.chat_streaming {
-                                    app.on_char(c);
-                                }
+                            KeyCode::Char(c) if !app.chat_streaming => {
+                                app.on_char(c);
                             }
                             _ => {}
                         },

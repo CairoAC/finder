@@ -198,6 +198,13 @@ impl App {
         }
     }
 
+    pub fn cancel_streaming(&mut self) {
+        if self.chat_streaming {
+            self.chat_streaming = false;
+            self.chat_response.push_str("\n\n[cancelled]");
+        }
+    }
+
     pub fn build_messages(&self) -> Vec<ChatMessage> {
         let mut messages = vec![ChatMessage {
             role: "system".to_string(),
