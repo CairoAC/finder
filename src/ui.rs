@@ -145,10 +145,3 @@ fn draw_results(frame: &mut Frame, area: Rect, app: &App) {
     let list = List::new(items);
     frame.render_widget(list, inner);
 }
-
-pub fn visible_result_count(frame: &Frame) -> usize {
-    let area = frame.area();
-    let header_and_input = 8;
-    let available = area.height.saturating_sub(header_and_input) as usize;
-    available / 2
-}
