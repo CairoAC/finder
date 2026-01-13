@@ -202,7 +202,7 @@ impl App {
         let mut messages = vec![ChatMessage {
             role: "system".to_string(),
             content: format!(
-                "You are a helpful assistant. Answer questions based on the following markdown documents:\n{}",
+                "You are a helpful assistant. Answer questions based on the following markdown documents. IMPORTANT: Respond in plain text only, no markdown formatting (no **, no ##, no bullets). Keep it clean and readable.\n\n{}",
                 self.md_context
             ),
         }];
