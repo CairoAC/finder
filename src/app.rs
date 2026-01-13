@@ -70,6 +70,23 @@ impl App {
         self.should_quit = true;
     }
 
+    pub fn on_click(&mut self, idx: usize, visible_count: usize) {
+        if idx >= self.results.len() {
+            return;
+        }
+
+        if idx == self.selected {
+            self.on_enter();
+        } else {
+            self.selected = idx;
+            if self.selected < self.scroll_offset {
+                self.scroll_offset = self.selected;
+            } else if self.selected >= self.scroll_offset + visible_count {
+                self.scroll_offset = self.selected - visible_count + 1;
+            }
+        }
+    }
+
     fn update_search(&mut self) {
         self.selected = 0;
         self.scroll_offset = 0;
