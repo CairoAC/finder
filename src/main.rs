@@ -119,12 +119,6 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                                     });
                                 }
                             }
-                            KeyCode::Char('f')
-                                if key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
-                                    && !app.chat_streaming =>
-                            {
-                                app.start_followup();
-                            }
                             KeyCode::Char('c')
                                 if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) =>
                             {

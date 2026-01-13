@@ -274,8 +274,6 @@ fn draw_chat_footer(frame: &mut Frame, area: Rect, app: &App) {
         ]
     } else {
         vec![
-            Span::styled("[Alt+F]", Style::default().fg(BLUE)),
-            Span::styled(" follow-up  ", Style::default().fg(DIM)),
             Span::styled("[Esc]", Style::default().fg(BLUE)),
             Span::styled(" back", Style::default().fg(DIM)),
         ]

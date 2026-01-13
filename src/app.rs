@@ -179,13 +179,6 @@ impl App {
         self.chat_scroll = 0;
     }
 
-    pub fn start_followup(&mut self) {
-        if self.chat_streaming {
-            return;
-        }
-        self.chat_input.clear();
-    }
-
     pub fn append_response(&mut self, text: &str) {
         if text == "\n[DONE]" {
             self.chat_streaming = false;
