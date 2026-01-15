@@ -2,6 +2,10 @@
 
 A CLI tool for searching and chatting with your markdown files.
 
+![Search Mode](assets/search.png)
+
+![Chat Mode](assets/chat.png)
+
 ## What it does
 
 **Search** - Find text across all `.md` files in the current directory. Type and see results instantly. Case-insensitive, fuzzy matching, works with partial words.
