@@ -6,7 +6,7 @@ A CLI tool for searching and chatting with your markdown files.
 
 ![Neovim](assets/neovim.png)
 
-![Chat Mode](assets/chat-v2.png)
+![Chat Mode](assets/chat.png?v=2)
 
 ![Citations Mode](assets/citations.png)
 
