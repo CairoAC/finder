@@ -7,6 +7,8 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Padding, Paragraph, Wrap},
     Frame,
 };
+use ratatui_core::style::{Color as CoreColor, Modifier as CoreModifier};
+use regex::Regex;
 
 const BLUE: Color = Color::Rgb(100, 149, 237);
 const DIM: Color = Color::Rgb(128, 128, 128);
@@ -335,7 +337,7 @@ fn draw_chat_response(frame: &mut Frame, area: Rect, app: &App) {
             .wrap(Wrap { trim: false });
         frame.render_widget(paragraph, inner);
     } else {
-        let styled_text = highlight_citations(&content);
+        let styled_text = render_markdown_with_citations(&content);
         let paragraph = Paragraph::new(styled_text)
             .wrap(Wrap { trim: false })
             .scroll((app.chat_scroll as u16, 0));
@@ -343,72 +345,88 @@ fn draw_chat_response(frame: &mut Frame, area: Rect, app: &App) {
     }
 }
 
-fn strip_markdown(text: &str) -> String {
-    let mut result = text.to_string();
-    result = regex::Regex::new(r"\*\*([^*]+)\*\*")
-        .unwrap()
-        .replace_all(&result, "$1")
-        .to_string();
-    result = regex::Regex::new(r"\*([^*]+)\*")
-        .unwrap()
-        .replace_all(&result, "$1")
-        .to_string();
-    result = regex::Regex::new(r"^#{1,6}\s+")
-        .unwrap()
-        .replace_all(&result, "")
-        .to_string();
-    result = regex::Regex::new(r"^\s*[\*\-]\s+")
-        .unwrap()
-        .replace_all(&result, "  ")
-        .to_string();
-    result
-}
+fn render_markdown_with_citations(content: &str) -> Text<'static> {
+    let citation_re = Regex::new(r"\[([^\]]+:\d+(?:,\s*\d+)*)\]").unwrap();
+    let citation_style = Style::default().fg(HIGHLIGHT).add_modifier(Modifier::DIM);
 
-fn highlight_citations(text: &str) -> Text<'static> {
-    let citation_re = regex::Regex::new(r"\[([^\]]+:\d+(?:,\s*\d+)*)\]").unwrap();
-    let mut lines: Vec<Line> = Vec::new();
+    let md_text = tui_markdown::from_str(content);
 
-    for raw_line in text.lines() {
-        let line = strip_markdown(raw_line);
+    let new_lines: Vec<Line<'static>> = md_text
+        .lines
+        .into_iter()
+        .map(|line| {
+            let mut new_spans: Vec<Span<'static>> = Vec::new();
 
-        if line.trim().is_empty() {
-            lines.push(Line::from(""));
-            continue;
-        }
+            for span in line.spans {
+                let content_str = span.content.to_string();
+                let fg_color = span.style.fg.map(|c| match c {
+                    CoreColor::Reset => Color::Reset,
+                    CoreColor::Black => Color::Black,
+                    CoreColor::Red => Color::Red,
+                    CoreColor::Green => Color::Green,
+                    CoreColor::Yellow => Color::Yellow,
+                    CoreColor::Blue => Color::Blue,
+                    CoreColor::Magenta => Color::Magenta,
+                    CoreColor::Cyan => Color::Cyan,
+                    CoreColor::Gray => Color::Gray,
+                    CoreColor::DarkGray => Color::DarkGray,
+                    CoreColor::LightRed => Color::LightRed,
+                    CoreColor::LightGreen => Color::LightGreen,
+                    CoreColor::LightYellow => Color::LightYellow,
+                    CoreColor::LightBlue => Color::LightBlue,
+                    CoreColor::LightMagenta => Color::LightMagenta,
+                    CoreColor::LightCyan => Color::LightCyan,
+                    CoreColor::White => Color::White,
+                    CoreColor::Rgb(r, g, b) => Color::Rgb(r, g, b),
+                    CoreColor::Indexed(i) => Color::Indexed(i),
+                });
 
-        let mut spans: Vec<Span> = Vec::new();
-        let mut last_end = 0;
+                let mut base_style = Style::default();
+                if let Some(fg) = fg_color {
+                    base_style = base_style.fg(fg);
+                }
+                if span.style.add_modifier.contains(CoreModifier::BOLD) {
+                    base_style = base_style.add_modifier(Modifier::BOLD);
+                }
+                if span.style.add_modifier.contains(CoreModifier::ITALIC) {
+                    base_style = base_style.add_modifier(Modifier::ITALIC);
+                }
+                if span.style.add_modifier.contains(CoreModifier::DIM) {
+                    base_style = base_style.add_modifier(Modifier::DIM);
+                }
 
-        for cap in citation_re.captures_iter(&line) {
-            let m = cap.get(0).unwrap();
-            if m.start() > last_end {
-                spans.push(Span::styled(
-                    line[last_end..m.start()].to_string(),
-                    Style::default().fg(Color::White),
-                ));
+                if citation_re.is_match(&content_str) {
+                    let mut last_end = 0;
+                    for cap in citation_re.captures_iter(&content_str) {
+                        let m = cap.get(0).unwrap();
+                        if m.start() > last_end {
+                            new_spans.push(Span::styled(
+                                content_str[last_end..m.start()].to_string(),
+                                base_style,
+                            ));
+                        }
+                        new_spans.push(Span::styled(
+                            m.as_str().to_string(),
+                            citation_style,
+                        ));
+                        last_end = m.end();
+                    }
+                    if last_end < content_str.len() {
+                        new_spans.push(Span::styled(
+                            content_str[last_end..].to_string(),
+                            base_style,
+                        ));
+                    }
+                } else {
+                    new_spans.push(Span::styled(content_str, base_style));
+                }
             }
-            spans.push(Span::styled(
-                m.as_str().to_string(),
-                Style::default().fg(HIGHLIGHT).add_modifier(Modifier::DIM),
-            ));
-            last_end = m.end();
-        }
 
-        if last_end < line.len() {
-            spans.push(Span::styled(
-                line[last_end..].to_string(),
-                Style::default().fg(Color::White),
-            ));
-        }
+            Line::from(new_spans)
+        })
+        .collect();
 
-        if spans.is_empty() {
-            spans.push(Span::styled(line.to_string(), Style::default().fg(Color::White)));
-        }
-
-        lines.push(Line::from(spans));
-    }
-
-    Text::from(lines)
+    Text::from(new_lines)
 }
 
 fn highlight_text(text: &str, indices: &[u32], base_style: Style) -> Vec<Span<'static>> {
