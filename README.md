@@ -6,9 +6,11 @@ A CLI tool for searching and chatting with your markdown files.
 
 ![Chat Mode](assets/chat.png)
 
+![Neovim](assets/neovim.png)
+
 ## What it does
 
-**Search** - Find text across all `.md` files in the current directory. Type and see results instantly. Case-insensitive, fuzzy matching, works with partial words.
+**Search** - Find text across all `.md` files in the current directory. Type and see results instantly. Case-insensitive, fuzzy matching, works with partial words. Press Enter to open the file in Neovim at the exact line.
 
 **Chat** - Ask questions about your documents using AI. All markdown files are loaded as context, and you can chat with Gemini Flash 3 with streaming responses.
 
