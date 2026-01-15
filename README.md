@@ -33,7 +33,7 @@ f
 | Key | Action |
 |-----|--------|
 | Type | Search |
-| `Up/Down` or `j/k` | Navigate |
+| `Up/Down` | Navigate |
 | `Enter` | Open in Neovim |
 | `?` | Chat mode |
 | `Esc` | Quit |

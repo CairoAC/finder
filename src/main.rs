@@ -75,18 +75,8 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                             KeyCode::Esc => app.on_escape(),
                             KeyCode::Enter => app.on_enter(),
                             KeyCode::Backspace => app.on_backspace(),
-                            KeyCode::Up
-                            | KeyCode::Char('k')
-                                if key.modifiers.is_empty() || key.code == KeyCode::Up =>
-                            {
-                                app.on_up();
-                            }
-                            KeyCode::Down
-                            | KeyCode::Char('j')
-                                if key.modifiers.is_empty() || key.code == KeyCode::Down =>
-                            {
-                                app.on_down(visible_count);
-                            }
+                            KeyCode::Up => app.on_up(),
+                            KeyCode::Down => app.on_down(visible_count),
                             KeyCode::Char(c) => {
                                 if key
                                     .modifiers
