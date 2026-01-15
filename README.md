@@ -4,9 +4,9 @@ A CLI tool for searching and chatting with your markdown files.
 
 ![Search Mode](assets/search.png)
 
-![Chat Mode](assets/chat.png)
-
 ![Neovim](assets/neovim.png)
+
+![Chat Mode](assets/chat.png)
 
 ## What it does
 
