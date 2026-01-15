@@ -8,20 +8,27 @@ A CLI tool for searching and chatting with your markdown files.
 
 ![Chat Mode](assets/chat.png)
 
+![Citations Mode](assets/citations.png)
+
 ## What it does
 
 **Search** - Find text across all `.md` files in the current directory. Type and see results instantly. Case-insensitive, fuzzy matching, works with partial words. Matched characters are highlighted. A live preview pane shows the file content with the matched line centered. Press Enter to open in Neovim at the exact line.
 
-**Chat** - Ask questions about your documents using AI. All markdown files are loaded as context, and you can chat with Gemini Flash 3 with streaming responses. The AI includes citations to specific lines, and you can press `1-9` to jump directly to the cited location.
+**Chat** - Ask questions about your documents using AI. All markdown files are loaded as context, and you can chat with Gemini Flash 3 with streaming responses. The AI includes citations to specific lines. Press `c` to browse and search citations with a preview pane.
 
 ## Installation
 
 ```bash
-git clone https://github.com/CairoAC/finder.git
-cd finder
-cargo build --release
-cp target/release/f ~/.local/bin/
+cargo install --git https://github.com/CairoAC/finder.git
 ```
+
+### Update
+
+```bash
+f --update
+```
+
+The tool checks for updates on startup and notifies you when a new version is available.
 
 ## Usage
 
@@ -50,8 +57,20 @@ Press `?` to chat with your documents.
 |-----|--------|
 | Type | Write question |
 | `Enter` | Send |
-| `Ctrl+C` | Cancel / back |
+| `c` | Browse citations |
+| `Ctrl+C` | Cancel stream |
 | `Esc` | Back to search |
+
+### Citations Mode
+
+Press `c` in chat mode to browse citations.
+
+| Key | Action |
+|-----|--------|
+| Type | Filter citations |
+| `Up/Down` | Navigate |
+| `Enter` | Open in Neovim |
+| `Esc` | Back to chat |
 
 ## Chat Setup
 

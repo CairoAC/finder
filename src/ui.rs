@@ -3,7 +3,7 @@ use crate::compass::COMPASS;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::{Block, Borders, List, ListItem, Padding, Paragraph, Wrap},
     Frame,
 };
@@ -16,6 +16,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     match app.mode {
         Mode::Search => draw_search(frame, app),
         Mode::Chat => draw_chat(frame, app),
+        Mode::Citations => draw_citations(frame, app),
     }
 }
 
@@ -88,6 +89,7 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
     let mode_indicator = match app.mode {
         Mode::Search => "",
         Mode::Chat => " [CHAT]",
+        Mode::Citations => " [CITATIONS]",
     };
 
     let lines: Vec<Line> = vec![
@@ -154,7 +156,7 @@ fn draw_results_list(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(DIM))
-        .padding(Padding::horizontal(1));
+        .padding(Padding::new(2, 2, 1, 1));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -170,7 +172,7 @@ fn draw_results_list(frame: &mut Frame, area: Rect, app: &App) {
         return;
     }
 
-    let visible_height = inner.height as usize / 2;
+    let visible_height = inner.height as usize / 3;
     let items: Vec<ListItem> = app
         .results
         .iter()
@@ -214,6 +216,7 @@ fn draw_results_list(frame: &mut Frame, area: Rect, app: &App) {
                     Span::styled(format!(" {}:{}", entry.file, entry.line_num), file_style),
                 ]),
                 Line::from(content_spans),
+                Line::from(""),
             ];
 
             ListItem::new(lines)
@@ -228,7 +231,7 @@ fn draw_preview(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(DIM))
-        .padding(Padding::horizontal(1));
+        .padding(Padding::new(2, 2, 1, 1));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -291,7 +294,7 @@ fn draw_chat_response(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(DIM))
-        .padding(Padding::horizontal(1));
+        .padding(Padding::new(2, 2, 1, 1));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -324,18 +327,88 @@ fn draw_chat_response(frame: &mut Frame, area: Rect, app: &App) {
         app.chat_response.clone()
     };
 
-    let style = if app.chat_response.is_empty() && app.chat_messages.is_empty() {
-        Style::default().fg(DIM)
+    let is_placeholder = app.chat_response.is_empty() && app.chat_messages.is_empty();
+
+    if is_placeholder {
+        let paragraph = Paragraph::new(content)
+            .style(Style::default().fg(DIM))
+            .wrap(Wrap { trim: false });
+        frame.render_widget(paragraph, inner);
     } else {
-        Style::default().fg(Color::White)
-    };
+        let styled_text = highlight_citations(&content);
+        let paragraph = Paragraph::new(styled_text)
+            .wrap(Wrap { trim: false })
+            .scroll((app.chat_scroll as u16, 0));
+        frame.render_widget(paragraph, inner);
+    }
+}
 
-    let paragraph = Paragraph::new(content)
-        .style(style)
-        .wrap(Wrap { trim: false })
-        .scroll((app.chat_scroll as u16, 0));
+fn strip_markdown(text: &str) -> String {
+    let mut result = text.to_string();
+    result = regex::Regex::new(r"\*\*([^*]+)\*\*")
+        .unwrap()
+        .replace_all(&result, "$1")
+        .to_string();
+    result = regex::Regex::new(r"\*([^*]+)\*")
+        .unwrap()
+        .replace_all(&result, "$1")
+        .to_string();
+    result = regex::Regex::new(r"^#{1,6}\s+")
+        .unwrap()
+        .replace_all(&result, "")
+        .to_string();
+    result = regex::Regex::new(r"^\s*[\*\-]\s+")
+        .unwrap()
+        .replace_all(&result, "  ")
+        .to_string();
+    result
+}
 
-    frame.render_widget(paragraph, inner);
+fn highlight_citations(text: &str) -> Text<'static> {
+    let citation_re = regex::Regex::new(r"\[([^\]]+:\d+(?:,\s*\d+)*)\]").unwrap();
+    let mut lines: Vec<Line> = Vec::new();
+
+    for raw_line in text.lines() {
+        let line = strip_markdown(raw_line);
+
+        if line.trim().is_empty() {
+            lines.push(Line::from(""));
+            continue;
+        }
+
+        let mut spans: Vec<Span> = Vec::new();
+        let mut last_end = 0;
+
+        for cap in citation_re.captures_iter(&line) {
+            let m = cap.get(0).unwrap();
+            if m.start() > last_end {
+                spans.push(Span::styled(
+                    line[last_end..m.start()].to_string(),
+                    Style::default().fg(Color::White),
+                ));
+            }
+            spans.push(Span::styled(
+                m.as_str().to_string(),
+                Style::default().fg(HIGHLIGHT).add_modifier(Modifier::DIM),
+            ));
+            last_end = m.end();
+        }
+
+        if last_end < line.len() {
+            spans.push(Span::styled(
+                line[last_end..].to_string(),
+                Style::default().fg(Color::White),
+            ));
+        }
+
+        if spans.is_empty() {
+            spans.push(Span::styled(line.to_string(), Style::default().fg(Color::White)));
+        }
+
+        lines.push(Line::from(spans));
+    }
+
+    Text::from(lines)
 }
 
 fn highlight_text(text: &str, indices: &[u32], base_style: Style) -> Vec<Span<'static>> {
@@ -367,19 +440,222 @@ fn highlight_text(text: &str, indices: &[u32], base_style: Style) -> Vec<Span<'s
     spans
 }
 
-fn draw_chat_footer(frame: &mut Frame, area: Rect, app: &App) {
+fn draw_citations(frame: &mut Frame, app: &App) {
+    let area = frame.area();
+
+    let chunks = Layout::vertical([
+        Constraint::Length(5),
+        Constraint::Length(3),
+        Constraint::Min(1),
+        Constraint::Length(3),
+    ])
+    .split(area);
+
+    draw_header(frame, chunks[0], app);
+    draw_citations_input(frame, chunks[1], app);
+    draw_citations_content(frame, chunks[2], app);
+    draw_citations_footer(frame, chunks[3]);
+}
+
+fn draw_citations_content(frame: &mut Frame, area: Rect, app: &App) {
+    let chunks = Layout::horizontal([
+        Constraint::Percentage(40),
+        Constraint::Percentage(60),
+    ])
+    .split(area);
+
+    draw_citations_list(frame, chunks[0], app);
+    draw_citations_preview(frame, chunks[1], app);
+}
+
+fn draw_citations_input(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(DIM));
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::horizontal(1));
+
+    let text = format!("> {}_", app.citations_query);
+    let paragraph = Paragraph::new(text)
+        .style(Style::default().fg(Color::White))
+        .block(block);
+    frame.render_widget(paragraph, area);
+}
+
+fn draw_citations_list(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .title(format!(" Citations ({}) ", app.citations.len()))
+        .title_style(Style::default().fg(BLUE))
+        .padding(Padding::new(2, 2, 1, 1));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let mut hints: Vec<Span> = if app.chat_streaming {
+    let citations = if app.citations_query.is_empty() {
+        &app.citations
+    } else {
+        &app.citations_filtered
+    };
+
+    if citations.is_empty() {
+        let msg = if app.citations_query.is_empty() {
+            "No citations"
+        } else {
+            "No matches"
+        };
+        let paragraph = Paragraph::new(Span::styled(msg, Style::default().fg(DIM)));
+        frame.render_widget(paragraph, inner);
+        return;
+    }
+
+    let visible_height = inner.height as usize / 2;
+    let items: Vec<ListItem> = citations
+        .iter()
+        .enumerate()
+        .take(visible_height)
+        .map(|(idx, citation)| {
+            let is_selected = idx == app.citations_selected;
+            let marker = if is_selected { ">" } else { " " };
+            let marker_style = Style::default().fg(BLUE);
+
+            let file_style = if is_selected {
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            let line_style = Style::default().fg(DIM);
+
+            let lines = vec![
+                Line::from(vec![
+                    Span::styled(marker, marker_style),
+                    Span::styled(format!(" {}", citation.file), file_style),
+                    Span::styled(format!(":{}", citation.line), line_style),
+                ]),
+                Line::from(""),
+            ];
+
+            ListItem::new(lines)
+        })
+        .collect();
+
+    let list = List::new(items);
+    frame.render_widget(list, inner);
+}
+
+fn draw_citations_preview(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::new(2, 2, 1, 1));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let citations = if app.citations_query.is_empty() {
+        &app.citations
+    } else {
+        &app.citations_filtered
+    };
+
+    let Some(citation) = citations.get(app.citations_selected) else {
+        let paragraph = Paragraph::new(Span::styled("No preview", Style::default().fg(DIM)));
+        frame.render_widget(paragraph, inner);
+        return;
+    };
+
+    let file_path = app.cwd.join(&citation.file);
+    let Ok(content) = std::fs::read_to_string(&file_path) else {
+        let paragraph = Paragraph::new(Span::styled("Cannot read file", Style::default().fg(DIM)));
+        frame.render_widget(paragraph, inner);
+        return;
+    };
+
+    let lines: Vec<&str> = content.lines().collect();
+    let target_line = citation.line.saturating_sub(1);
+    let visible_lines = inner.height as usize;
+    let half_visible = visible_lines / 2;
+
+    let start_line = target_line.saturating_sub(half_visible);
+    let end_line = (start_line + visible_lines).min(lines.len());
+
+    let preview_lines: Vec<Line> = lines[start_line..end_line]
+        .iter()
+        .enumerate()
+        .map(|(i, line)| {
+            let actual_line_num = start_line + i + 1;
+            let is_target = actual_line_num == citation.line;
+
+            let line_num_style = if is_target {
+                Style::default().fg(HIGHLIGHT)
+            } else {
+                Style::default().fg(DIM)
+            };
+
+            let content_style = if is_target {
+                Style::default().fg(Color::White)
+            } else {
+                Style::default().fg(DIM)
+            };
+
+            let max_width = inner.width.saturating_sub(6) as usize;
+            let truncated: String = line.chars().take(max_width).collect();
+
+            Line::from(vec![
+                Span::styled(format!("{:>4} ", actual_line_num), line_num_style),
+                Span::styled(truncated, content_style),
+            ])
+        })
+        .collect();
+
+    let paragraph = Paragraph::new(preview_lines);
+    frame.render_widget(paragraph, inner);
+}
+
+fn draw_citations_footer(frame: &mut Frame, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::horizontal(1));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let hints = vec![
+        Span::styled("[Enter]", Style::default().fg(BLUE)),
+        Span::styled(" open  ", Style::default().fg(DIM)),
+        Span::styled("[Esc]", Style::default().fg(BLUE)),
+        Span::styled(" back", Style::default().fg(DIM)),
+    ];
+
+    let paragraph = Paragraph::new(Line::from(hints));
+    frame.render_widget(paragraph, inner);
+}
+
+fn draw_chat_footer(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::horizontal(1));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let hints: Vec<Span> = if app.chat_streaming {
         vec![
             Span::styled("streaming... ", Style::default().fg(BLUE)),
             Span::styled("[Ctrl+C]", Style::default().fg(DIM)),
             Span::styled(" cancel", Style::default().fg(DIM)),
+        ]
+    } else if !app.citations.is_empty() && app.chat_input.is_empty() {
+        vec![
+            Span::styled("[Esc]", Style::default().fg(BLUE)),
+            Span::styled(" back  ", Style::default().fg(DIM)),
+            Span::styled("[c]", Style::default().fg(HIGHLIGHT)),
+            Span::styled(format!(" {} citations", app.citations.len()), Style::default().fg(DIM)),
         ]
     } else {
         vec![
@@ -387,14 +663,6 @@ fn draw_chat_footer(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled(" back", Style::default().fg(DIM)),
         ]
     };
-
-    if !app.chat_streaming && !app.citations.is_empty() && app.chat_input.is_empty() {
-        hints.push(Span::styled("  |  ", Style::default().fg(DIM)));
-        for (i, citation) in app.citations.iter().take(9).enumerate() {
-            hints.push(Span::styled(format!("[{}]", i + 1), Style::default().fg(HIGHLIGHT)));
-            hints.push(Span::styled(format!(" {}:{} ", citation.file, citation.line), Style::default().fg(DIM)));
-        }
-    }
 
     let paragraph = Paragraph::new(Line::from(hints));
     frame.render_widget(paragraph, inner);

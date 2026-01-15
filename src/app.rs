@@ -6,6 +6,7 @@ use std::path::PathBuf;
 pub enum Mode {
     Search,
     Chat,
+    Citations,
 }
 
 #[derive(Debug, Clone)]
@@ -32,6 +33,9 @@ pub struct App {
     pub md_context: String,
     pub api_key: Option<String>,
     pub citations: Vec<Citation>,
+    pub citations_query: String,
+    pub citations_filtered: Vec<Citation>,
+    pub citations_selected: usize,
     searcher: Searcher,
 }
 
@@ -60,6 +64,9 @@ impl App {
             md_context,
             api_key,
             citations: Vec::new(),
+            citations_query: String::new(),
+            citations_filtered: Vec::new(),
+            citations_selected: 0,
             searcher,
         }
     }
@@ -77,7 +84,12 @@ impl App {
     }
 
     pub fn jump_to_citation(&mut self, idx: usize) {
-        if let Some(citation) = self.citations.get(idx) {
+        let citations = if self.citations_query.is_empty() {
+            &self.citations
+        } else {
+            &self.citations_filtered
+        };
+        if let Some(citation) = citations.get(idx) {
             self.selected_entry = Some(SearchEntry {
                 file: citation.file.clone(),
                 line_num: citation.line,
@@ -85,6 +97,40 @@ impl App {
                 match_indices: Vec::new(),
             });
             self.should_quit = true;
+        }
+    }
+
+    pub fn enter_citations_mode(&mut self) {
+        if !self.citations.is_empty() {
+            self.mode = Mode::Citations;
+            self.citations_query.clear();
+            self.citations_filtered.clear();
+            self.citations_selected = 0;
+        }
+    }
+
+    pub fn filter_citations(&mut self) {
+        if self.citations_query.is_empty() {
+            self.citations_filtered.clear();
+            self.citations_selected = 0;
+            return;
+        }
+
+        let query = self.citations_query.to_lowercase();
+        self.citations_filtered = self
+            .citations
+            .iter()
+            .filter(|c| c.file.to_lowercase().contains(&query))
+            .cloned()
+            .collect();
+        self.citations_selected = 0;
+    }
+
+    pub fn citations_count(&self) -> usize {
+        if self.citations_query.is_empty() {
+            self.citations.len()
+        } else {
+            self.citations_filtered.len()
         }
     }
 
@@ -103,6 +149,10 @@ impl App {
                     self.chat_input.push(c);
                 }
             }
+            Mode::Citations => {
+                self.citations_query.push(c);
+                self.filter_citations();
+            }
         }
     }
 
@@ -116,6 +166,10 @@ impl App {
                 if !self.chat_streaming {
                     self.chat_input.pop();
                 }
+            }
+            Mode::Citations => {
+                self.citations_query.pop();
+                self.filter_citations();
             }
         }
     }
@@ -135,6 +189,11 @@ impl App {
                     self.chat_scroll -= 1;
                 }
             }
+            Mode::Citations => {
+                if self.citations_selected > 0 {
+                    self.citations_selected -= 1;
+                }
+            }
         }
     }
 
@@ -150,6 +209,12 @@ impl App {
             }
             Mode::Chat => {
                 self.chat_scroll += 1;
+            }
+            Mode::Citations => {
+                let count = self.citations_count();
+                if self.citations_selected + 1 < count {
+                    self.citations_selected += 1;
+                }
             }
         }
     }
@@ -170,6 +235,12 @@ impl App {
                 }
                 self.mode = Mode::Search;
                 self.chat_input.clear();
+            }
+            Mode::Citations => {
+                self.mode = Mode::Chat;
+                self.citations_query.clear();
+                self.citations_filtered.clear();
+                self.citations_selected = 0;
             }
         }
     }

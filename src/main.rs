@@ -3,6 +3,7 @@ mod chat;
 mod compass;
 mod search;
 mod ui;
+mod update;
 
 use app::{App, Mode};
 use crossterm::{
@@ -19,7 +20,31 @@ use std::process::Command;
 use tokio::sync::mpsc;
 
 fn main() -> io::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.contains(&"--version".to_string()) || args.contains(&"-v".to_string()) {
+        println!("finder {}", update::current_version());
+        return Ok(());
+    }
+
+    if args.contains(&"--update".to_string()) {
+        update::run_update();
+        return Ok(());
+    }
+
     let rt = tokio::runtime::Runtime::new().unwrap();
+
+    let update_msg = rt.block_on(async {
+        update::check_for_update().await
+    });
+
+    if let Some(new_version) = &update_msg {
+        eprintln!(
+            "Update available: {} -> {} (run `f --update` to upgrade)\n",
+            update::current_version(),
+            new_version
+        );
+    }
 
     let cwd = std::env::current_dir()?;
     let mut app = App::new(cwd);
@@ -49,7 +74,7 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
 
     loop {
-        let visible_count = terminal.get_frame().area().height as usize / 2;
+        let visible_count = terminal.get_frame().area().height as usize / 3;
 
         while let Ok(chunk) = rx.try_recv() {
             app.append_response(&chunk);
@@ -122,14 +147,32 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                             KeyCode::Up => app.on_up(),
                             KeyCode::Down => app.on_down(visible_count),
                             KeyCode::Char(c) if !app.chat_streaming => {
-                                if c.is_ascii_digit()
+                                if c == 'c'
                                     && app.chat_input.is_empty()
                                     && !app.citations.is_empty()
                                 {
-                                    let idx = c.to_digit(10).unwrap_or(0) as usize;
-                                    if idx > 0 && idx <= app.citations.len() {
-                                        app.jump_to_citation(idx - 1);
-                                    }
+                                    app.enter_citations_mode();
+                                } else {
+                                    app.on_char(c);
+                                }
+                            }
+                            _ => {}
+                        },
+                        Mode::Citations => match key.code {
+                            KeyCode::Esc => app.on_escape(),
+                            KeyCode::Enter => {
+                                app.jump_to_citation(app.citations_selected);
+                            }
+                            KeyCode::Backspace => app.on_backspace(),
+                            KeyCode::Up => app.on_up(),
+                            KeyCode::Down => app.on_down(visible_count),
+                            KeyCode::Char(c) => {
+                                if key
+                                    .modifiers
+                                    .contains(crossterm::event::KeyModifiers::CONTROL)
+                                    && c == 'c'
+                                {
+                                    app.on_escape();
                                 } else {
                                     app.on_char(c);
                                 }
