@@ -1,6 +1,7 @@
 mod app;
 mod chat;
 mod compass;
+mod markdown;
 mod search;
 mod ui;
 mod update;
@@ -146,15 +147,14 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                             KeyCode::Backspace if !app.chat_streaming => app.on_backspace(),
                             KeyCode::Up => app.on_up(),
                             KeyCode::Down => app.on_down(visible_count),
+                            KeyCode::Char('c')
+                                if key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
+                                    && !app.citations.is_empty() =>
+                            {
+                                app.enter_citations_mode();
+                            }
                             KeyCode::Char(c) if !app.chat_streaming => {
-                                if c == 'c'
-                                    && app.chat_input.is_empty()
-                                    && !app.citations.is_empty()
-                                {
-                                    app.enter_citations_mode();
-                                } else {
-                                    app.on_char(c);
-                                }
+                                app.on_char(c);
                             }
                             _ => {}
                         },

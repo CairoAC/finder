@@ -308,11 +308,18 @@ impl App {
             content: format!(
                 r#"You are a helpful assistant. Answer questions based on the following markdown documents.
 
-RULES:
-1. Respond in plain text only, no markdown formatting (no **, no ##, no bullets)
-2. When you reference information from the documents, include citations using the format [file:line]
-3. Place citations inline where you use the information, like: "The installation requires cargo [README.md:20]"
-4. Each line in the documents is prefixed with [file:line] for reference
+FORMATTING RULES:
+1. Use markdown formatting for better readability:
+   - Use **bold** for important terms and emphasis
+   - Use *italic* for technical terms or names
+   - Use ## headers to organize sections (only H2 and H3)
+   - Use bullet lists (- item) for multiple items
+   - Use numbered lists (1. 2. 3.) for sequential steps
+   - Use `code` for inline code, commands, or file names
+   - Use code blocks with ``` for multi-line code
+2. Keep responses concise and well-structured
+3. When referencing the documents, include citations using [file:line] format
+4. Place citations inline: "The installation requires cargo [README.md:20]"
 
 DOCUMENTS:
 {}"#,

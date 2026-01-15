@@ -3,7 +3,7 @@ use crate::compass::COMPASS;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span, Text},
+    text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Padding, Paragraph, Wrap},
     Frame,
 };
@@ -335,80 +335,13 @@ fn draw_chat_response(frame: &mut Frame, area: Rect, app: &App) {
             .wrap(Wrap { trim: false });
         frame.render_widget(paragraph, inner);
     } else {
-        let styled_text = highlight_citations(&content);
+        let markdown_text = crate::markdown::render(&content);
+        let styled_text = crate::markdown::highlight_citations(markdown_text);
         let paragraph = Paragraph::new(styled_text)
             .wrap(Wrap { trim: false })
             .scroll((app.chat_scroll as u16, 0));
         frame.render_widget(paragraph, inner);
     }
-}
-
-fn strip_markdown(text: &str) -> String {
-    let mut result = text.to_string();
-    result = regex::Regex::new(r"\*\*([^*]+)\*\*")
-        .unwrap()
-        .replace_all(&result, "$1")
-        .to_string();
-    result = regex::Regex::new(r"\*([^*]+)\*")
-        .unwrap()
-        .replace_all(&result, "$1")
-        .to_string();
-    result = regex::Regex::new(r"^#{1,6}\s+")
-        .unwrap()
-        .replace_all(&result, "")
-        .to_string();
-    result = regex::Regex::new(r"^\s*[\*\-]\s+")
-        .unwrap()
-        .replace_all(&result, "  ")
-        .to_string();
-    result
-}
-
-fn highlight_citations(text: &str) -> Text<'static> {
-    let citation_re = regex::Regex::new(r"\[([^\]]+:\d+(?:,\s*\d+)*)\]").unwrap();
-    let mut lines: Vec<Line> = Vec::new();
-
-    for raw_line in text.lines() {
-        let line = strip_markdown(raw_line);
-
-        if line.trim().is_empty() {
-            lines.push(Line::from(""));
-            continue;
-        }
-
-        let mut spans: Vec<Span> = Vec::new();
-        let mut last_end = 0;
-
-        for cap in citation_re.captures_iter(&line) {
-            let m = cap.get(0).unwrap();
-            if m.start() > last_end {
-                spans.push(Span::styled(
-                    line[last_end..m.start()].to_string(),
-                    Style::default().fg(Color::White),
-                ));
-            }
-            spans.push(Span::styled(
-                m.as_str().to_string(),
-                Style::default().fg(HIGHLIGHT).add_modifier(Modifier::DIM),
-            ));
-            last_end = m.end();
-        }
-
-        if last_end < line.len() {
-            spans.push(Span::styled(
-                line[last_end..].to_string(),
-                Style::default().fg(Color::White),
-            ));
-        }
-
-        if spans.is_empty() {
-            spans.push(Span::styled(line.to_string(), Style::default().fg(Color::White)));
-        }
-
-        lines.push(Line::from(spans));
-    }
-
-    Text::from(lines)
 }
 
 fn highlight_text(text: &str, indices: &[u32], base_style: Style) -> Vec<Span<'static>> {
@@ -650,11 +583,11 @@ fn draw_chat_footer(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled("[Ctrl+C]", Style::default().fg(DIM)),
             Span::styled(" cancel", Style::default().fg(DIM)),
         ]
-    } else if !app.citations.is_empty() && app.chat_input.is_empty() {
+    } else if !app.citations.is_empty() {
         vec![
             Span::styled("[Esc]", Style::default().fg(BLUE)),
             Span::styled(" back  ", Style::default().fg(DIM)),
-            Span::styled("[c]", Style::default().fg(HIGHLIGHT)),
+            Span::styled("[Alt+c]", Style::default().fg(HIGHLIGHT)),
             Span::styled(format!(" {} citations", app.citations.len()), Style::default().fg(DIM)),
         ]
     } else {

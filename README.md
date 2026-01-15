@@ -14,7 +14,7 @@ A CLI tool for searching and chatting with your markdown files.
 
 **Search** - Find text across all `.md` files in the current directory. Type and see results instantly. Case-insensitive, fuzzy matching, works with partial words. Matched characters are highlighted. A live preview pane shows the file content with the matched line centered. Press Enter to open in Neovim at the exact line.
 
-**Chat** - Ask questions about your documents using AI. All markdown files are loaded as context, and you can chat with Gemini Flash 3 with streaming responses. The AI includes citations to specific lines. Press `c` to browse and search citations with a preview pane.
+**Chat** - Ask questions about your documents using AI. All markdown files are loaded as context, and you can chat with Gemini Flash 3 with streaming responses. The AI includes citations to specific lines. Press `Alt+c` to browse and search citations with a preview pane.
 
 ## Installation
 
@@ -57,13 +57,13 @@ Press `?` to chat with your documents.
 |-----|--------|
 | Type | Write question |
 | `Enter` | Send |
-| `c` | Browse citations |
+| `Alt+c` | Browse citations |
 | `Ctrl+C` | Cancel stream |
 | `Esc` | Back to search |
 
 ### Citations Mode
 
-Press `c` in chat mode to browse citations.
+Press `Alt+c` in chat mode to browse citations.
 
 | Key | Action |
 |-----|--------|
