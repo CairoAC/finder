@@ -122,7 +122,17 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                             KeyCode::Up => app.on_up(),
                             KeyCode::Down => app.on_down(visible_count),
                             KeyCode::Char(c) if !app.chat_streaming => {
-                                app.on_char(c);
+                                if c.is_ascii_digit()
+                                    && app.chat_input.is_empty()
+                                    && !app.citations.is_empty()
+                                {
+                                    let idx = c.to_digit(10).unwrap_or(0) as usize;
+                                    if idx > 0 && idx <= app.citations.len() {
+                                        app.jump_to_citation(idx - 1);
+                                    }
+                                } else {
+                                    app.on_char(c);
+                                }
                             }
                             _ => {}
                         },

@@ -1,5 +1,6 @@
 use ignore::WalkBuilder;
 use nucleo::{Config, Nucleo, Utf32String};
+use nucleo_matcher::{Matcher, pattern::Pattern, pattern::CaseMatching, pattern::Normalization};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -8,6 +9,7 @@ pub struct SearchEntry {
     pub file: String,
     pub line_num: usize,
     pub content: String,
+    pub match_indices: Vec<u32>,
 }
 
 pub struct Searcher {
@@ -71,6 +73,7 @@ impl Searcher {
                     file: file_name.clone(),
                     line_num: line_idx + 1,
                     content: trimmed.to_string(),
+                    match_indices: Vec::new(),
                 });
             }
         }
@@ -91,11 +94,19 @@ impl Searcher {
 
         let snapshot = self.nucleo.snapshot();
         let mut results = Vec::new();
+        let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
+        let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
 
         for item in snapshot.matched_items(..snapshot.matched_item_count().min(100)) {
             let idx = *item.data as usize;
             if idx < self.entries.len() {
-                results.push(self.entries[idx].clone());
+                let mut entry = self.entries[idx].clone();
+                let mut indices = Vec::new();
+                let mut buf = Vec::new();
+                let haystack = nucleo_matcher::Utf32Str::new(&entry.content, &mut buf);
+                pattern.indices(haystack, &mut matcher, &mut indices);
+                entry.match_indices = indices;
+                results.push(entry);
             }
         }
 

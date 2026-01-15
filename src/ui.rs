@@ -10,6 +10,7 @@ use ratatui::{
 
 const BLUE: Color = Color::Rgb(100, 149, 237);
 const DIM: Color = Color::Rgb(128, 128, 128);
+const HIGHLIGHT: Color = Color::Rgb(255, 200, 100);
 
 pub fn draw(frame: &mut Frame, app: &App) {
     match app.mode {
@@ -139,6 +140,17 @@ fn draw_chat_input(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_results(frame: &mut Frame, area: Rect, app: &App) {
+    let chunks = Layout::horizontal([
+        Constraint::Percentage(50),
+        Constraint::Percentage(50),
+    ])
+    .split(area);
+
+    draw_results_list(frame, chunks[0], app);
+    draw_preview(frame, chunks[1], app);
+}
+
+fn draw_results_list(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(DIM))
@@ -180,22 +192,28 @@ fn draw_results(frame: &mut Frame, area: Rect, app: &App) {
 
             let content_style = Style::default().fg(DIM);
 
-            let truncated_content: String = entry.content.chars().take(60).collect();
-            let content_display = if entry.content.len() > 60 {
-                format!("{}...", truncated_content)
-            } else {
-                truncated_content
-            };
+            let max_content_width = area.width.saturating_sub(8) as usize;
+            let truncated_content: String = entry.content.chars().take(max_content_width).collect();
+            let truncated_len = truncated_content.chars().count();
+            let suffix = if entry.content.chars().count() > max_content_width { "..." } else { "" };
+
+            let truncated_indices: Vec<u32> = entry
+                .match_indices
+                .iter()
+                .filter(|&&i| (i as usize) < truncated_len)
+                .copied()
+                .collect();
+
+            let mut content_spans = vec![Span::raw("  \"")];
+            content_spans.extend(highlight_text(&truncated_content, &truncated_indices, content_style));
+            content_spans.push(Span::styled(format!("{}\"", suffix), content_style));
 
             let lines = vec![
                 Line::from(vec![
                     Span::styled(marker, marker_style),
                     Span::styled(format!(" {}:{}", entry.file, entry.line_num), file_style),
                 ]),
-                Line::from(vec![
-                    Span::raw("  "),
-                    Span::styled(format!("\"{}\"", content_display), content_style),
-                ]),
+                Line::from(content_spans),
             ];
 
             ListItem::new(lines)
@@ -204,6 +222,69 @@ fn draw_results(frame: &mut Frame, area: Rect, app: &App) {
 
     let list = List::new(items);
     frame.render_widget(list, inner);
+}
+
+fn draw_preview(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::horizontal(1));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let Some(entry) = app.results.get(app.selected) else {
+        let paragraph = Paragraph::new(Span::styled("No preview", Style::default().fg(DIM)));
+        frame.render_widget(paragraph, inner);
+        return;
+    };
+
+    let file_path = app.cwd.join(&entry.file);
+    let Ok(content) = std::fs::read_to_string(&file_path) else {
+        let paragraph = Paragraph::new(Span::styled("Cannot read file", Style::default().fg(DIM)));
+        frame.render_widget(paragraph, inner);
+        return;
+    };
+
+    let lines: Vec<&str> = content.lines().collect();
+    let target_line = entry.line_num.saturating_sub(1);
+    let visible_lines = inner.height as usize;
+    let half_visible = visible_lines / 2;
+
+    let start_line = target_line.saturating_sub(half_visible);
+    let end_line = (start_line + visible_lines).min(lines.len());
+
+    let preview_lines: Vec<Line> = lines[start_line..end_line]
+        .iter()
+        .enumerate()
+        .map(|(i, line)| {
+            let actual_line_num = start_line + i + 1;
+            let is_target = actual_line_num == entry.line_num;
+
+            let line_num_style = if is_target {
+                Style::default().fg(HIGHLIGHT)
+            } else {
+                Style::default().fg(DIM)
+            };
+
+            let content_style = if is_target {
+                Style::default().fg(Color::White)
+            } else {
+                Style::default().fg(DIM)
+            };
+
+            let max_width = inner.width.saturating_sub(6) as usize;
+            let truncated: String = line.chars().take(max_width).collect();
+
+            Line::from(vec![
+                Span::styled(format!("{:>4} ", actual_line_num), line_num_style),
+                Span::styled(truncated, content_style),
+            ])
+        })
+        .collect();
+
+    let paragraph = Paragraph::new(preview_lines);
+    frame.render_widget(paragraph, inner);
 }
 
 fn draw_chat_response(frame: &mut Frame, area: Rect, app: &App) {
@@ -257,6 +338,35 @@ fn draw_chat_response(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(paragraph, inner);
 }
 
+fn highlight_text(text: &str, indices: &[u32], base_style: Style) -> Vec<Span<'static>> {
+    let highlight_style = base_style.fg(HIGHLIGHT);
+    let chars: Vec<char> = text.chars().collect();
+    let mut spans = Vec::new();
+    let mut current = String::new();
+    let mut is_highlight = false;
+
+    for (i, &c) in chars.iter().enumerate() {
+        let should_highlight = indices.contains(&(i as u32));
+
+        if should_highlight != is_highlight {
+            if !current.is_empty() {
+                let style = if is_highlight { highlight_style } else { base_style };
+                spans.push(Span::styled(current.clone(), style));
+                current.clear();
+            }
+            is_highlight = should_highlight;
+        }
+        current.push(c);
+    }
+
+    if !current.is_empty() {
+        let style = if is_highlight { highlight_style } else { base_style };
+        spans.push(Span::styled(current, style));
+    }
+
+    spans
+}
+
 fn draw_chat_footer(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
@@ -265,7 +375,7 @@ fn draw_chat_footer(frame: &mut Frame, area: Rect, app: &App) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let hints = if app.chat_streaming {
+    let mut hints: Vec<Span> = if app.chat_streaming {
         vec![
             Span::styled("streaming... ", Style::default().fg(BLUE)),
             Span::styled("[Ctrl+C]", Style::default().fg(DIM)),
@@ -277,6 +387,14 @@ fn draw_chat_footer(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled(" back", Style::default().fg(DIM)),
         ]
     };
+
+    if !app.chat_streaming && !app.citations.is_empty() && app.chat_input.is_empty() {
+        hints.push(Span::styled("  |  ", Style::default().fg(DIM)));
+        for (i, citation) in app.citations.iter().take(9).enumerate() {
+            hints.push(Span::styled(format!("[{}]", i + 1), Style::default().fg(HIGHLIGHT)));
+            hints.push(Span::styled(format!(" {}:{} ", citation.file, citation.line), Style::default().fg(DIM)));
+        }
+    }
 
     let paragraph = Paragraph::new(Line::from(hints));
     frame.render_widget(paragraph, inner);

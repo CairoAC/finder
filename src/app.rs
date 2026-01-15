@@ -8,6 +8,12 @@ pub enum Mode {
     Chat,
 }
 
+#[derive(Debug, Clone)]
+pub struct Citation {
+    pub file: String,
+    pub line: usize,
+}
+
 pub struct App {
     pub query: String,
     pub results: Vec<SearchEntry>,
@@ -25,6 +31,7 @@ pub struct App {
     pub chat_scroll: usize,
     pub md_context: String,
     pub api_key: Option<String>,
+    pub citations: Vec<Citation>,
     searcher: Searcher,
 }
 
@@ -52,7 +59,32 @@ impl App {
             chat_scroll: 0,
             md_context,
             api_key,
+            citations: Vec::new(),
             searcher,
+        }
+    }
+
+    pub fn parse_citations(&mut self) {
+        self.citations.clear();
+        let re = regex::Regex::new(r"\[([^\]]+):(\d+)\]").unwrap();
+        for cap in re.captures_iter(&self.chat_response) {
+            let file = cap.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
+            let line = cap.get(2).and_then(|m| m.as_str().parse().ok()).unwrap_or(1);
+            if !self.citations.iter().any(|c| c.file == file && c.line == line) {
+                self.citations.push(Citation { file, line });
+            }
+        }
+    }
+
+    pub fn jump_to_citation(&mut self, idx: usize) {
+        if let Some(citation) = self.citations.get(idx) {
+            self.selected_entry = Some(SearchEntry {
+                file: citation.file.clone(),
+                line_num: citation.line,
+                content: String::new(),
+                match_indices: Vec::new(),
+            });
+            self.should_quit = true;
         }
     }
 
@@ -182,6 +214,7 @@ impl App {
     pub fn append_response(&mut self, text: &str) {
         if text == "\n[DONE]" {
             self.chat_streaming = false;
+            self.parse_citations();
             self.chat_messages.push(ChatMessage {
                 role: "assistant".to_string(),
                 content: self.chat_response.clone(),
@@ -202,7 +235,16 @@ impl App {
         let mut messages = vec![ChatMessage {
             role: "system".to_string(),
             content: format!(
-                "You are a helpful assistant. Answer questions based on the following markdown documents. IMPORTANT: Respond in plain text only, no markdown formatting (no **, no ##, no bullets). Keep it clean and readable.\n\n{}",
+                r#"You are a helpful assistant. Answer questions based on the following markdown documents.
+
+RULES:
+1. Respond in plain text only, no markdown formatting (no **, no ##, no bullets)
+2. When you reference information from the documents, include citations using the format [file:line]
+3. Place citations inline where you use the information, like: "The installation requires cargo [README.md:20]"
+4. Each line in the documents is prefixed with [file:line] for reference
+
+DOCUMENTS:
+{}"#,
                 self.md_context
             ),
         }];

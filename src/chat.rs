@@ -79,8 +79,14 @@ pub fn load_context(dir: &Path) -> String {
         }
         if path.extension().is_some_and(|e| e == "md") {
             if let Ok(content) = std::fs::read_to_string(path) {
-                let name = path.file_name().unwrap_or_default().to_string_lossy();
-                context.push_str(&format!("\n--- {} ---\n{}\n", name, content));
+                let name = path
+                    .strip_prefix(dir)
+                    .unwrap_or(path)
+                    .to_string_lossy();
+                context.push_str(&format!("\n--- {} ---\n", name));
+                for (i, line) in content.lines().enumerate() {
+                    context.push_str(&format!("[{}:{}] {}\n", name, i + 1, line));
+                }
             }
         }
     }
