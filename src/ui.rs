@@ -17,6 +17,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Mode::Search => draw_search(frame, app),
         Mode::Chat => draw_chat(frame, app),
         Mode::Citations => draw_citations(frame, app),
+        Mode::DirectoryPicker => draw_directory_picker(frame, app),
     }
 }
 
@@ -90,6 +91,7 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
         Mode::Search => "",
         Mode::Chat => " [CHAT]",
         Mode::Citations => " [CITATIONS]",
+        Mode::DirectoryPicker => " [DIRECTORY]",
     };
 
     let lines: Vec<Line> = vec![
@@ -596,6 +598,197 @@ fn draw_chat_footer(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled(" back", Style::default().fg(DIM)),
         ]
     };
+
+    let paragraph = Paragraph::new(Line::from(hints));
+    frame.render_widget(paragraph, inner);
+}
+
+fn draw_directory_picker(frame: &mut Frame, app: &App) {
+    let area = frame.area();
+
+    let chunks = Layout::vertical([
+        Constraint::Length(5),
+        Constraint::Length(3),
+        Constraint::Min(1),
+        Constraint::Length(3),
+    ])
+    .split(area);
+
+    draw_header(frame, chunks[0], app);
+    draw_dir_input(frame, chunks[1], app);
+    draw_dir_content(frame, chunks[2], app);
+    draw_dir_footer(frame, chunks[3]);
+}
+
+fn draw_dir_input(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::horizontal(1));
+
+    let text = format!("> {}_", app.dir_query);
+    let paragraph = Paragraph::new(text)
+        .style(Style::default().fg(Color::White))
+        .block(block);
+    frame.render_widget(paragraph, area);
+}
+
+fn draw_dir_content(frame: &mut Frame, area: Rect, app: &App) {
+    let chunks = Layout::horizontal([
+        Constraint::Percentage(40),
+        Constraint::Percentage(60),
+    ])
+    .split(area);
+
+    draw_dir_list(frame, chunks[0], app);
+    draw_dir_preview(frame, chunks[1], app);
+}
+
+fn draw_dir_list(frame: &mut Frame, area: Rect, app: &App) {
+    let dirs = app.dir_list();
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .title(format!(" Directories ({}) ", dirs.len()))
+        .title_style(Style::default().fg(BLUE))
+        .padding(Padding::new(2, 2, 1, 1));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if dirs.is_empty() {
+        let msg = if app.dir_query.is_empty() {
+            "No subdirectories"
+        } else {
+            "No matches"
+        };
+        let paragraph = Paragraph::new(Span::styled(msg, Style::default().fg(DIM)));
+        frame.render_widget(paragraph, inner);
+        return;
+    }
+
+    let visible_height = inner.height as usize;
+    let items: Vec<ListItem> = dirs
+        .iter()
+        .enumerate()
+        .skip(app.dir_scroll)
+        .take(visible_height)
+        .map(|(idx, dir)| {
+            let is_selected = idx == app.dir_selected;
+            let marker = if is_selected { ">" } else { " " };
+            let marker_style = Style::default().fg(BLUE);
+
+            let dir_style = if is_selected {
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            let dir_str = dir.to_string_lossy();
+
+            ListItem::new(Line::from(vec![
+                Span::styled(marker, marker_style),
+                Span::styled(format!(" {}", dir_str), dir_style),
+            ]))
+        })
+        .collect();
+
+    let list = List::new(items);
+    frame.render_widget(list, inner);
+}
+
+fn draw_dir_preview(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .title(" Contents ")
+        .title_style(Style::default().fg(BLUE))
+        .padding(Padding::new(2, 2, 1, 1));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let dirs = app.dir_list();
+    let Some(selected_dir) = dirs.get(app.dir_selected) else {
+        let paragraph = Paragraph::new(Span::styled("No directory selected", Style::default().fg(DIM)));
+        frame.render_widget(paragraph, inner);
+        return;
+    };
+
+    let full_path = app.original_cwd.join(selected_dir);
+    let full_path = full_path.canonicalize().unwrap_or(full_path);
+
+    let mut entries: Vec<String> = Vec::new();
+    if let Ok(read_dir) = std::fs::read_dir(&full_path) {
+        for entry in read_dir.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            if is_dir {
+                entries.push(format!("{}/", name));
+            } else {
+                entries.push(name);
+            }
+        }
+    }
+    entries.sort();
+
+    if entries.is_empty() {
+        let paragraph = Paragraph::new(Span::styled("(empty)", Style::default().fg(DIM)));
+        frame.render_widget(paragraph, inner);
+        return;
+    }
+
+    let visible_height = inner.height as usize;
+    let lines: Vec<Line> = entries
+        .iter()
+        .take(visible_height)
+        .map(|entry| {
+            let style = if entry.ends_with('/') {
+                Style::default().fg(BLUE)
+            } else if entry.ends_with(".md") {
+                Style::default().fg(HIGHLIGHT)
+            } else {
+                Style::default().fg(DIM)
+            };
+            Line::from(Span::styled(entry.clone(), style))
+        })
+        .collect();
+
+    let more = if entries.len() > visible_height {
+        format!("\n... and {} more", entries.len() - visible_height)
+    } else {
+        String::new()
+    };
+
+    let mut text: Vec<Line> = lines;
+    if !more.is_empty() {
+        text.push(Line::from(Span::styled(more, Style::default().fg(DIM))));
+    }
+
+    let paragraph = Paragraph::new(text);
+    frame.render_widget(paragraph, inner);
+}
+
+fn draw_dir_footer(frame: &mut Frame, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::horizontal(1));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let hints = vec![
+        Span::styled("[Enter]", Style::default().fg(BLUE)),
+        Span::styled(" select  ", Style::default().fg(DIM)),
+        Span::styled("[Esc]", Style::default().fg(BLUE)),
+        Span::styled(" cancel  ", Style::default().fg(DIM)),
+        Span::styled("[Ctrl+O]", Style::default().fg(HIGHLIGHT)),
+        Span::styled(" change dir", Style::default().fg(DIM)),
+    ];
 
     let paragraph = Paragraph::new(Line::from(hints));
     frame.render_widget(paragraph, inner);

@@ -1,5 +1,7 @@
 use crate::chat::ChatMessage;
 use crate::search::{SearchEntry, Searcher};
+use ignore::WalkBuilder;
+use nucleo_matcher::{pattern::{CaseMatching, Normalization, Pattern}, Matcher, Utf32Str};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -7,6 +9,7 @@ pub enum Mode {
     Search,
     Chat,
     Citations,
+    DirectoryPicker,
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +40,13 @@ pub struct App {
     pub citations_filtered: Vec<Citation>,
     pub citations_selected: usize,
     searcher: Searcher,
+    // Directory picker
+    pub dir_entries: Vec<PathBuf>,
+    pub dir_filtered: Vec<PathBuf>,
+    pub dir_query: String,
+    pub dir_selected: usize,
+    pub dir_scroll: usize,
+    pub original_cwd: PathBuf,
 }
 
 impl App {
@@ -45,6 +55,7 @@ impl App {
         let entry_count = searcher.entry_count();
         let md_context = crate::chat::load_context(&cwd);
         let api_key = crate::chat::find_api_key();
+        let original_cwd = cwd.clone();
 
         Self {
             query: String::new(),
@@ -68,6 +79,12 @@ impl App {
             citations_filtered: Vec::new(),
             citations_selected: 0,
             searcher,
+            dir_entries: Vec::new(),
+            dir_filtered: Vec::new(),
+            dir_query: String::new(),
+            dir_selected: 0,
+            dir_scroll: 0,
+            original_cwd,
         }
     }
 
@@ -153,6 +170,10 @@ impl App {
                 self.citations_query.push(c);
                 self.filter_citations();
             }
+            Mode::DirectoryPicker => {
+                self.dir_query.push(c);
+                self.filter_directories();
+            }
         }
     }
 
@@ -170,6 +191,10 @@ impl App {
             Mode::Citations => {
                 self.citations_query.pop();
                 self.filter_citations();
+            }
+            Mode::DirectoryPicker => {
+                self.dir_query.pop();
+                self.filter_directories();
             }
         }
     }
@@ -194,6 +219,14 @@ impl App {
                     self.citations_selected -= 1;
                 }
             }
+            Mode::DirectoryPicker => {
+                if self.dir_selected > 0 {
+                    self.dir_selected -= 1;
+                    if self.dir_selected < self.dir_scroll {
+                        self.dir_scroll = self.dir_selected;
+                    }
+                }
+            }
         }
     }
 
@@ -214,6 +247,15 @@ impl App {
                 let count = self.citations_count();
                 if self.citations_selected + 1 < count {
                     self.citations_selected += 1;
+                }
+            }
+            Mode::DirectoryPicker => {
+                let count = self.dir_list().len();
+                if self.dir_selected + 1 < count {
+                    self.dir_selected += 1;
+                    if self.dir_selected >= self.dir_scroll + visible_count {
+                        self.dir_scroll = self.dir_selected - visible_count + 1;
+                    }
                 }
             }
         }
@@ -241,6 +283,13 @@ impl App {
                 self.citations_query.clear();
                 self.citations_filtered.clear();
                 self.citations_selected = 0;
+            }
+            Mode::DirectoryPicker => {
+                self.mode = Mode::Search;
+                self.dir_query.clear();
+                self.dir_filtered.clear();
+                self.dir_selected = 0;
+                self.dir_scroll = 0;
             }
         }
     }
@@ -345,5 +394,113 @@ DOCUMENTS:
         } else {
             self.results = self.searcher.search(&self.query);
         }
+    }
+
+    pub fn enter_directory_picker(&mut self) {
+        self.dir_entries = self.scan_directories();
+        self.dir_filtered.clear();
+        self.dir_query.clear();
+        self.dir_selected = 0;
+        self.dir_scroll = 0;
+        self.mode = Mode::DirectoryPicker;
+    }
+
+    fn scan_directories(&self) -> Vec<PathBuf> {
+        let mut dirs = Vec::new();
+
+        // Add parent directories (up to 3 levels) with their actual names
+        // e.g., "../www", "../../jow", "../../../Users"
+        let mut ancestor = self.original_cwd.clone();
+        for i in 1..=3 {
+            if let Some(parent) = ancestor.parent() {
+                if let Some(name) = parent.file_name() {
+                    let prefix = "../".repeat(i);
+                    dirs.push(PathBuf::from(format!("{}{}", prefix, name.to_string_lossy())));
+                }
+                ancestor = parent.to_path_buf();
+            } else {
+                break;
+            }
+        }
+
+        // Add subdirectories (5 levels deep)
+        let walker = WalkBuilder::new(&self.original_cwd)
+            .hidden(true)
+            .git_ignore(true)
+            .max_depth(Some(5))
+            .build();
+
+        for result in walker {
+            let Ok(entry) = result else { continue };
+            let path = entry.path();
+
+            if !path.is_dir() {
+                continue;
+            }
+
+            if let Ok(rel) = path.strip_prefix(&self.original_cwd) {
+                if !rel.as_os_str().is_empty() {
+                    dirs.push(rel.to_path_buf());
+                }
+            }
+        }
+
+        dirs.sort();
+        dirs
+    }
+
+    pub fn filter_directories(&mut self) {
+        if self.dir_query.is_empty() {
+            self.dir_filtered.clear();
+            self.dir_selected = 0;
+            self.dir_scroll = 0;
+            return;
+        }
+
+        let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
+        let pattern = Pattern::parse(&self.dir_query, CaseMatching::Ignore, Normalization::Smart);
+
+        let mut scored: Vec<(i64, PathBuf)> = self
+            .dir_entries
+            .iter()
+            .filter_map(|p| {
+                let s = p.to_string_lossy();
+                let mut buf = Vec::new();
+                let haystack = Utf32Str::new(&s, &mut buf);
+                pattern.score(haystack, &mut matcher).map(|score| (score as i64, p.clone()))
+            })
+            .collect();
+
+        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        self.dir_filtered = scored.into_iter().map(|(_, p)| p).collect();
+        self.dir_selected = 0;
+        self.dir_scroll = 0;
+    }
+
+    pub fn dir_list(&self) -> &[PathBuf] {
+        if self.dir_query.is_empty() {
+            &self.dir_entries
+        } else {
+            &self.dir_filtered
+        }
+    }
+
+    pub fn select_directory(&mut self) {
+        let list = self.dir_list();
+        if let Some(selected) = list.get(self.dir_selected) {
+            let new_cwd = self.original_cwd.join(selected);
+            if let Ok(canonical) = new_cwd.canonicalize() {
+                self.cwd = canonical.clone();
+                self.original_cwd = canonical;
+                self.searcher = Searcher::new(&self.cwd);
+                self.entry_count = self.searcher.entry_count();
+                self.md_context = crate::chat::load_context(&self.cwd);
+                self.query.clear();
+                self.results.clear();
+                self.selected = 0;
+                self.scroll_offset = 0;
+            }
+        }
+        self.mode = Mode::Search;
     }
 }
