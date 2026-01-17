@@ -24,7 +24,6 @@ pub struct App {
     pub query: String,
     pub results: Vec<SearchEntry>,
     pub selected: usize,
-    pub scroll_offset: usize,
     pub should_quit: bool,
     pub selected_entry: Option<SearchEntry>,
     pub cwd: PathBuf,
@@ -48,7 +47,6 @@ pub struct App {
     pub dir_filtered: Vec<PathBuf>,
     pub dir_query: String,
     pub dir_selected: usize,
-    pub dir_scroll: usize,
     pub original_cwd: PathBuf,
     pub quick_query: String,
     pub quick_response: String,
@@ -75,7 +73,6 @@ impl App {
             query: String::new(),
             results: Vec::new(),
             selected: 0,
-            scroll_offset: 0,
             should_quit: false,
             selected_entry: None,
             cwd,
@@ -99,7 +96,6 @@ impl App {
             dir_filtered: Vec::new(),
             dir_query: String::new(),
             dir_selected: 0,
-            dir_scroll: 0,
             original_cwd,
             quick_query: String::new(),
             quick_response: String::new(),
@@ -177,6 +173,10 @@ impl App {
     }
 
     pub fn on_char(&mut self, c: char) {
+        if c == '\n' || c == '\r' {
+            return;
+        }
+
         match self.mode {
             Mode::Search => {
                 if c == '?' {
@@ -247,9 +247,6 @@ impl App {
             Mode::Search => {
                 if self.selected > 0 {
                     self.selected -= 1;
-                    if self.selected < self.scroll_offset {
-                        self.scroll_offset = self.selected;
-                    }
                 }
             }
             Mode::Chat => {
@@ -265,23 +262,17 @@ impl App {
             Mode::DirectoryPicker => {
                 if self.dir_selected > 0 {
                     self.dir_selected -= 1;
-                    if self.dir_selected < self.dir_scroll {
-                        self.dir_scroll = self.dir_selected;
-                    }
                 }
             }
             Mode::QuickAnswer => {}
         }
     }
 
-    pub fn on_down(&mut self, visible_count: usize) {
+    pub fn on_down(&mut self) {
         match self.mode {
             Mode::Search => {
                 if self.selected + 1 < self.results.len() {
                     self.selected += 1;
-                    if self.selected >= self.scroll_offset + visible_count {
-                        self.scroll_offset = self.selected - visible_count + 1;
-                    }
                 }
             }
             Mode::Chat => {
@@ -297,9 +288,6 @@ impl App {
                 let count = self.dir_list().len();
                 if self.dir_selected + 1 < count {
                     self.dir_selected += 1;
-                    if self.dir_selected >= self.dir_scroll + visible_count {
-                        self.dir_scroll = self.dir_selected - visible_count + 1;
-                    }
                 }
             }
             Mode::QuickAnswer => {}
@@ -334,7 +322,6 @@ impl App {
                 self.dir_query.clear();
                 self.dir_filtered.clear();
                 self.dir_selected = 0;
-                self.dir_scroll = 0;
             }
             Mode::QuickAnswer => {
                 if self.quick_streaming {
@@ -344,27 +331,6 @@ impl App {
                 self.quick_query.clear();
                 self.quick_response.clear();
                 self.quick_history.clear();
-            }
-        }
-    }
-
-    pub fn on_click(&mut self, idx: usize, visible_count: usize) {
-        if self.mode != Mode::Search {
-            return;
-        }
-
-        if idx >= self.results.len() {
-            return;
-        }
-
-        if idx == self.selected {
-            self.on_enter();
-        } else {
-            self.selected = idx;
-            if self.selected < self.scroll_offset {
-                self.scroll_offset = self.selected;
-            } else if self.selected >= self.scroll_offset + visible_count {
-                self.scroll_offset = self.selected - visible_count + 1;
             }
         }
     }
@@ -441,7 +407,6 @@ DOCUMENTS:
 
     fn update_search(&mut self) {
         self.selected = 0;
-        self.scroll_offset = 0;
 
         if self.query.is_empty() {
             self.results.clear();
@@ -455,7 +420,6 @@ DOCUMENTS:
         self.dir_filtered.clear();
         self.dir_query.clear();
         self.dir_selected = 0;
-        self.dir_scroll = 0;
         self.mode = Mode::DirectoryPicker;
     }
 
@@ -508,7 +472,6 @@ DOCUMENTS:
         if self.dir_query.is_empty() {
             self.dir_filtered.clear();
             self.dir_selected = 0;
-            self.dir_scroll = 0;
             return;
         }
 
@@ -529,7 +492,6 @@ DOCUMENTS:
         scored.sort_by(|a, b| b.0.cmp(&a.0));
         self.dir_filtered = scored.into_iter().map(|(_, p)| p).collect();
         self.dir_selected = 0;
-        self.dir_scroll = 0;
     }
 
     pub fn dir_list(&self) -> &[PathBuf] {
@@ -555,7 +517,6 @@ DOCUMENTS:
                 self.query.clear();
                 self.results.clear();
                 self.selected = 0;
-                self.scroll_offset = 0;
             }
         }
         self.mode = Mode::Search;

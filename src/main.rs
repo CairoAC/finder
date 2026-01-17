@@ -9,17 +9,42 @@ mod update;
 
 use app::{App, Mode};
 use crossterm::{
-    event::{
-        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, MouseButton,
-        MouseEventKind,
-    },
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::prelude::*;
-use std::io::{self, stdout};
+use std::io::{self, stdout, Write};
 use std::process::Command;
 use tokio::sync::mpsc;
+fn copy_to_clipboard(text: &str) {
+    use std::process::{Command, Stdio};
+
+    let clean_text: String = text
+        .chars()
+        .filter(|c| !matches!(*c, '│' | '┌' | '┐' | '└' | '┘' | '├' | '┤' | '┬' | '┴' | '┼' | '─' | '║' | '═'))
+        .collect();
+
+    let is_wsl = std::path::Path::new("/mnt/c/WINDOWS/system32/clip.exe").exists();
+
+    let (cmd, args): (&str, &[&str]) = if is_wsl {
+        ("clip.exe", &[])
+    } else {
+        ("xclip", &["-selection", "clipboard"])
+    };
+
+    if let Ok(mut child) = Command::new(cmd)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        if let Some(stdin) = child.stdin.as_mut() {
+            let _ = stdin.write_all(clean_text.as_bytes());
+        }
+        let _ = child.wait();
+    }
+}
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -76,9 +101,12 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
     let (quick_tx, mut quick_rx) = mpsc::unbounded_channel::<String>();
 
-    loop {
-        let visible_count = terminal.get_frame().area().height as usize / 3;
+    let mut selection_start: Option<(u16, u16)> = None;
+    let mut selection_end: Option<(u16, u16)> = None;
+    let mut selecting = false;
+    let mut screen_buffer: Vec<String> = Vec::new();
 
+    loop {
         while let Ok(chunk) = rx.try_recv() {
             app.append_response(&chunk);
         }
@@ -87,9 +115,19 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
             app.append_quick_response(&chunk);
         }
 
-        terminal.draw(|frame| {
-            ui::draw(frame, app);
+        let completed = terminal.draw(|frame| {
+            ui::draw(frame, app, selection_start, selection_end);
         })?;
+
+        screen_buffer.clear();
+        for y in 0..completed.area.height {
+            let mut line = String::new();
+            for x in 0..completed.area.width {
+                let cell = &completed.buffer[(x, y)];
+                line.push_str(cell.symbol());
+            }
+            screen_buffer.push(line);
+        }
 
         if app.should_quit {
             return Ok(());
@@ -108,7 +146,7 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                             KeyCode::Enter => app.on_enter(),
                             KeyCode::Backspace => app.on_backspace(),
                             KeyCode::Up => app.on_up(),
-                            KeyCode::Down => app.on_down(visible_count),
+                            KeyCode::Down => app.on_down(),
                             KeyCode::Char(c) => {
                                 if key
                                     .modifiers
@@ -161,7 +199,7 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                             }
                             KeyCode::Backspace if !app.chat_streaming => app.on_backspace(),
                             KeyCode::Up => app.on_up(),
-                            KeyCode::Down => app.on_down(visible_count),
+                            KeyCode::Down => app.on_down(),
                             KeyCode::Char('c')
                                 if key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
                                     && !app.citations.is_empty() =>
@@ -180,7 +218,7 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                             }
                             KeyCode::Backspace => app.on_backspace(),
                             KeyCode::Up => app.on_up(),
-                            KeyCode::Down => app.on_down(visible_count),
+                            KeyCode::Down => app.on_down(),
                             KeyCode::Char(c) => {
                                 if key
                                     .modifiers
@@ -199,7 +237,7 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                             KeyCode::Enter => app.select_directory(),
                             KeyCode::Backspace => app.on_backspace(),
                             KeyCode::Up => app.on_up(),
-                            KeyCode::Down => app.on_down(visible_count),
+                            KeyCode::Down => app.on_down(),
                             KeyCode::Char(c) => {
                                 if key
                                     .modifiers
@@ -265,30 +303,74 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                     }
                 }
                 Event::Mouse(mouse) => {
-                    if app.mode == Mode::Search {
-                        let results_start_row = 9;
-                        match mouse.kind {
-                            MouseEventKind::ScrollUp => app.on_up(),
-                            MouseEventKind::ScrollDown => app.on_down(visible_count),
-                            MouseEventKind::Down(MouseButton::Left) => {
-                                if mouse.row >= results_start_row {
-                                    let relative_row = (mouse.row - results_start_row) as usize;
-                                    let clicked_idx = relative_row / 2 + app.scroll_offset;
-                                    app.on_click(clicked_idx, visible_count);
-                                }
+                    match mouse.kind {
+                        MouseEventKind::Down(MouseButton::Left) => {
+                            selection_start = Some((mouse.column, mouse.row));
+                            selection_end = Some((mouse.column, mouse.row));
+                            selecting = true;
+                        }
+                        MouseEventKind::Drag(MouseButton::Left) => {
+                            if selecting {
+                                selection_end = Some((mouse.column, mouse.row));
                             }
-                            _ => {}
                         }
-                    } else {
-                        match mouse.kind {
-                            MouseEventKind::ScrollUp => app.on_up(),
-                            MouseEventKind::ScrollDown => app.on_down(visible_count),
-                            _ => {}
+                        MouseEventKind::Up(MouseButton::Left) => {
+                            if selecting {
+                                selection_end = Some((mouse.column, mouse.row));
+                                selecting = false;
+
+                                if let (Some(start), Some(end)) = (selection_start, selection_end) {
+                                    let text = extract_text(&screen_buffer, start, end);
+                                    if !text.is_empty() {
+                                        copy_to_clipboard(&text);
+                                    }
+                                }
+
+                                selection_start = None;
+                                selection_end = None;
+                            }
                         }
+                        _ => {}
                     }
                 }
                 _ => {}
             }
         }
     }
+}
+
+fn extract_text(buffer: &[String], start: (u16, u16), end: (u16, u16)) -> String {
+    let (start, end) = if start.1 < end.1 || (start.1 == end.1 && start.0 <= end.0) {
+        (start, end)
+    } else {
+        (end, start)
+    };
+
+    let (start_col, start_row) = (start.0 as usize, start.1 as usize);
+    let (end_col, end_row) = (end.0 as usize, end.1 as usize);
+
+    let mut result = String::new();
+
+    for row in start_row..=end_row {
+        if row >= buffer.len() {
+            continue;
+        }
+
+        let line = &buffer[row];
+        let chars: Vec<char> = line.chars().collect();
+
+        let col_start = if row == start_row { start_col } else { 0 };
+        let col_end = if row == end_row { (end_col + 1).min(chars.len()) } else { chars.len() };
+
+        if col_start < chars.len() {
+            let selected: String = chars[col_start..col_end.min(chars.len())].iter().collect();
+            result.push_str(selected.trim_end());
+        }
+
+        if row != end_row {
+            result.push('\n');
+        }
+    }
+
+    result.trim().to_string()
 }

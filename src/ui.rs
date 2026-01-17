@@ -12,13 +12,43 @@ const BLUE: Color = Color::Rgb(100, 149, 237);
 const DIM: Color = Color::Rgb(128, 128, 128);
 const HIGHLIGHT: Color = Color::Rgb(255, 200, 100);
 
-pub fn draw(frame: &mut Frame, app: &App) {
+pub fn draw(frame: &mut Frame, app: &App, sel_start: Option<(u16, u16)>, sel_end: Option<(u16, u16)>) {
     match app.mode {
         Mode::Search => draw_search(frame, app),
         Mode::Chat => draw_chat(frame, app),
         Mode::Citations => draw_citations(frame, app),
         Mode::DirectoryPicker => draw_directory_picker(frame, app),
         Mode::QuickAnswer => draw_quick_answer(frame, app),
+    }
+
+    if let (Some(start), Some(end)) = (sel_start, sel_end) {
+        draw_selection(frame, start, end);
+    }
+}
+
+fn draw_selection(frame: &mut Frame, start: (u16, u16), end: (u16, u16)) {
+    let (start, end) = if start.1 < end.1 || (start.1 == end.1 && start.0 <= end.0) {
+        (start, end)
+    } else {
+        (end, start)
+    };
+
+    let area = frame.area();
+    let sel_style = Style::default().bg(Color::Rgb(80, 80, 120));
+
+    for row in start.1..=end.1 {
+        if row >= area.height {
+            continue;
+        }
+
+        let col_start = if row == start.1 { start.0 } else { 0 };
+        let col_end = if row == end.1 { end.0 + 1 } else { area.width };
+
+        for col in col_start..col_end.min(area.width) {
+            if let Some(cell) = frame.buffer_mut().cell_mut((col, row)) {
+                cell.set_style(sel_style);
+            }
+        }
     }
 }
 
@@ -177,11 +207,16 @@ fn draw_results_list(frame: &mut Frame, area: Rect, app: &App) {
     }
 
     let visible_height = inner.height as usize / 3;
+    let skip = if app.selected >= visible_height {
+        app.selected - visible_height + 1
+    } else {
+        0
+    };
     let items: Vec<ListItem> = app
         .results
         .iter()
         .enumerate()
-        .skip(app.scroll_offset)
+        .skip(skip)
         .take(visible_height)
         .map(|(idx, entry)| {
             let is_selected = idx == app.selected;
@@ -447,9 +482,15 @@ fn draw_citations_list(frame: &mut Frame, area: Rect, app: &App) {
     }
 
     let visible_height = inner.height as usize / 2;
+    let skip = if app.citations_selected >= visible_height {
+        app.citations_selected - visible_height + 1
+    } else {
+        0
+    };
     let items: Vec<ListItem> = citations
         .iter()
         .enumerate()
+        .skip(skip)
         .take(visible_height)
         .map(|(idx, citation)| {
             let is_selected = idx == app.citations_selected;
@@ -671,10 +712,15 @@ fn draw_dir_list(frame: &mut Frame, area: Rect, app: &App) {
     }
 
     let visible_height = inner.height as usize;
+    let skip = if app.dir_selected >= visible_height {
+        app.dir_selected - visible_height + 1
+    } else {
+        0
+    };
     let items: Vec<ListItem> = dirs
         .iter()
         .enumerate()
-        .skip(app.dir_scroll)
+        .skip(skip)
         .take(visible_height)
         .map(|(idx, dir)| {
             let is_selected = idx == app.dir_selected;
@@ -922,10 +968,16 @@ fn draw_quick_sources(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(block, area);
 
     if app.quick_sources_expanded {
+        let skip = if app.quick_sources_selected >= 5 {
+            app.quick_sources_selected - 4
+        } else {
+            0
+        };
         let items: Vec<ListItem> = app
             .quick_sources
             .iter()
             .enumerate()
+            .skip(skip)
             .take(5)
             .map(|(idx, chunk)| {
                 let is_selected = idx == app.quick_sources_selected;
