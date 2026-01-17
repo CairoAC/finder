@@ -58,6 +58,7 @@ impl App {
         let loaded_files = load_md_files(&cwd);
         let searcher = Searcher::from_files(&loaded_files);
         let entry_count = searcher.entry_count();
+        let md_context = build_context(&loaded_files);
         let api_key = crate::chat::find_api_key();
         let original_cwd = cwd.clone();
 
@@ -76,7 +77,7 @@ impl App {
             chat_response: String::new(),
             chat_streaming: false,
             chat_scroll: 0,
-            md_context: String::new(),
+            md_context,
             api_key,
             citations: Vec::new(),
             citations_query: String::new(),
@@ -93,12 +94,6 @@ impl App {
             quick_query: String::new(),
             quick_response: String::new(),
             quick_streaming: false,
-        }
-    }
-
-    pub fn ensure_context_loaded(&mut self) {
-        if self.md_context.is_empty() {
-            self.md_context = build_context(&self.loaded_files);
         }
     }
 
@@ -169,10 +164,8 @@ impl App {
         match self.mode {
             Mode::Search => {
                 if c == '?' {
-                    self.ensure_context_loaded();
                     self.mode = Mode::Chat;
                 } else if c == '@' && self.query.is_empty() {
-                    self.ensure_context_loaded();
                     self.mode = Mode::QuickAnswer;
                     self.quick_query.clear();
                     self.quick_response.clear();
@@ -539,7 +532,7 @@ DOCUMENTS:
                 self.loaded_files = load_md_files(&self.cwd);
                 self.searcher = Searcher::from_files(&self.loaded_files);
                 self.entry_count = self.searcher.entry_count();
-                self.md_context.clear();
+                self.md_context = build_context(&self.loaded_files);
                 self.query.clear();
                 self.results.clear();
                 self.selected = 0;

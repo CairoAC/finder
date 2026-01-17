@@ -2,14 +2,6 @@
 
 A CLI tool for searching and chatting with your markdown files.
 
-![Search Mode](assets/search.png)
-
-![Neovim](assets/neovim.png)
-
-![Chat Mode](assets/chat.png)
-
-![Citations Mode](assets/citations.png)
-
 ## What it does
 
 **Search** - Find text across all `.md` files in the current directory. Type and see results instantly. Case-insensitive, fuzzy matching, works with partial words. Matched characters are highlighted. A live preview pane shows the file content with the matched line centered. Press Enter to open in Neovim at the exact line.
