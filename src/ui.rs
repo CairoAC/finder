@@ -690,10 +690,24 @@ fn draw_dir_list(frame: &mut Frame, area: Rect, app: &App) {
             };
 
             let dir_str = dir.to_string_lossy();
+            let display = if dir_str.starts_with("..") {
+                let full_path = app.original_cwd.join(dir);
+                if let Ok(resolved) = full_path.canonicalize() {
+                    if let Some(name) = resolved.file_name() {
+                        format!("{} ({})", dir_str, name.to_string_lossy())
+                    } else {
+                        dir_str.to_string()
+                    }
+                } else {
+                    dir_str.to_string()
+                }
+            } else {
+                dir_str.to_string()
+            };
 
             ListItem::new(Line::from(vec![
                 Span::styled(marker, marker_style),
-                Span::styled(format!(" {}", dir_str), dir_style),
+                Span::styled(format!(" {}", display), dir_style),
             ]))
         })
         .collect();

@@ -462,18 +462,19 @@ DOCUMENTS:
     fn scan_directories(&self) -> Vec<PathBuf> {
         let mut dirs = Vec::new();
 
-        // Add parent directories (up to 3 levels) with their actual names
-        // e.g., "../www", "../../jow", "../../../Users"
-        let mut ancestor = self.original_cwd.clone();
+        // Add parent directories (up to 3 levels) as relative paths
         for i in 1..=3 {
-            if let Some(parent) = ancestor.parent() {
-                if let Some(name) = parent.file_name() {
-                    let prefix = "../".repeat(i);
-                    dirs.push(PathBuf::from(format!("{}{}", prefix, name.to_string_lossy())));
+            let mut parent_path = self.original_cwd.clone();
+            for _ in 0..i {
+                if let Some(p) = parent_path.parent() {
+                    parent_path = p.to_path_buf();
+                } else {
+                    break;
                 }
-                ancestor = parent.to_path_buf();
-            } else {
-                break;
+            }
+            if parent_path != self.original_cwd {
+                let prefix = "../".repeat(i);
+                dirs.push(PathBuf::from(prefix.trim_end_matches('/')));
             }
         }
 
