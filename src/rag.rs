@@ -55,31 +55,42 @@ fn save_mtimes(cache_dir: &PathBuf, mtimes: &HashMap<String, u64>) {
     }
 }
 
-fn extract_paragraphs(content: &str) -> Vec<(usize, String)> {
-    let mut paragraphs = Vec::new();
-    let mut current_para = String::new();
+fn extract_sections(content: &str) -> Vec<(usize, String)> {
+    let mut sections = Vec::new();
+    let mut current_section = String::new();
     let mut start_line = 0;
+    let mut in_code_block = false;
 
     for (i, line) in content.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            if !current_para.is_empty() {
-                paragraphs.push((start_line + 1, current_para.clone()));
-                current_para.clear();
+        if line.trim().starts_with("```") {
+            in_code_block = !in_code_block;
+        }
+
+        let is_header = !in_code_block && line.starts_with('#');
+
+        if is_header && !current_section.is_empty() {
+            sections.push((start_line + 1, current_section.trim().to_string()));
+            current_section.clear();
+            start_line = i;
+        }
+
+        if current_section.is_empty() && !line.trim().is_empty() {
+            start_line = i;
+        }
+
+        if !line.trim().is_empty() || !current_section.is_empty() {
+            if !current_section.is_empty() {
+                current_section.push(' ');
             }
-        } else {
-            if current_para.is_empty() {
-                start_line = i;
-            } else {
-                current_para.push(' ');
-            }
-            current_para.push_str(trimmed);
+            current_section.push_str(line.trim());
         }
     }
-    if !current_para.is_empty() {
-        paragraphs.push((start_line + 1, current_para));
+
+    if !current_section.is_empty() {
+        sections.push((start_line + 1, current_section.trim().to_string()));
     }
-    paragraphs
+
+    sections
 }
 
 fn build_schema() -> (Schema, Field, Field, Field) {
@@ -110,11 +121,11 @@ impl RagIndex {
             let mut index_writer: IndexWriter = index.writer(15_000_000).unwrap();
 
             for file in files {
-                for (line_num, para) in extract_paragraphs(&file.content) {
+                for (line_num, section) in extract_sections(&file.content) {
                     index_writer.add_document(doc!(
                         file_field => file.name.clone(),
                         line_field => line_num.to_string(),
-                        content_field => para
+                        content_field => section
                     )).unwrap();
                 }
             }
