@@ -6,9 +6,9 @@ A CLI tool for searching and chatting with your markdown files.
 
 **Search** - Find text across all `.md` files in the current directory. Type and see results instantly. Case-insensitive, fuzzy matching, works with partial words. Matched characters are highlighted. A live preview pane shows the file content with the matched line centered. Press Enter to open in Neovim at the exact line.
 
-**Chat** - Ask questions about your documents using AI. All markdown files are loaded as context, and you can chat with Gemini Flash 3 with streaming responses. The AI includes citations to specific lines. Press `Alt+c` to browse and search citations with a preview pane.
+**Chat** - Ask questions about your documents using AI. All markdown files are loaded as context, and you can chat with Gemini 2.5 Flash-Lite with streaming responses. The AI includes citations to specific lines. Press `Alt+c` to browse and search citations with a preview pane.
 
-**Quick Answer** - Type `@` followed by your question for a rapid 2-3 sentence answer. Designed for when you need information fast during meetings. No fluff, just the essential answer you can speak out loud.
+**Quick Answer** - Type `@` followed by your question for fast answers you can read aloud in meetings. Uses RAG (BM25 via Tantivy) to find the most relevant paragraphs from your docs. Press `Tab` to see which sources were used. The index is cached on disk for instant startup.
 
 **Directory Picker** - Press `Ctrl+O` to navigate to a different directory without leaving the app. Fuzzy search through parent directories (3 levels up) and subdirectories (5 levels down). Preview directory contents before switching.
 
@@ -72,12 +72,15 @@ Press `Alt+c` in chat mode to browse citations.
 
 ### Quick Answer
 
-Type `@` followed by a question for instant answers.
+Type `@` followed by a question for fast answers.
 
 | Key | Action |
 |-----|--------|
 | Type | Write question |
 | `Enter` | Send |
+| `Tab` | Toggle sources |
+| `Up/Down` | Navigate sources (when expanded) |
+| `Enter` | Open source in Neovim (when expanded) |
 | `Ctrl+C` | Cancel stream |
 | `Esc` | Back to search |
 
@@ -109,4 +112,3 @@ echo 'OPENROUTER_API_KEY=sk-or-...' >> ~/.env
 ## License
 
 MIT
-

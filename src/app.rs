@@ -1,5 +1,5 @@
 use crate::chat::ChatMessage;
-use crate::rag::RagIndex;
+use crate::rag::{RagChunk, RagIndex};
 use crate::search::{build_context, load_md_files, LoadedFile, SearchEntry, Searcher};
 use ignore::WalkBuilder;
 use nucleo_matcher::{pattern::{CaseMatching, Normalization, Pattern}, Matcher, Utf32Str};
@@ -53,6 +53,9 @@ pub struct App {
     pub quick_query: String,
     pub quick_response: String,
     pub quick_streaming: bool,
+    pub quick_sources: Vec<RagChunk>,
+    pub quick_sources_expanded: bool,
+    pub quick_sources_selected: usize,
 }
 
 impl App {
@@ -61,7 +64,7 @@ impl App {
         let searcher = Searcher::from_files(&loaded_files);
         let entry_count = searcher.entry_count();
         let md_context = build_context(&loaded_files);
-        let rag_index = RagIndex::new(&loaded_files);
+        let rag_index = RagIndex::new(&loaded_files, &cwd);
         let api_key = crate::chat::find_api_key();
         let original_cwd = cwd.clone();
 
@@ -98,6 +101,9 @@ impl App {
             quick_query: String::new(),
             quick_response: String::new(),
             quick_streaming: false,
+            quick_sources: Vec::new(),
+            quick_sources_expanded: false,
+            quick_sources_selected: 0,
         }
     }
 
@@ -537,7 +543,7 @@ DOCUMENTS:
                 self.searcher = Searcher::from_files(&self.loaded_files);
                 self.entry_count = self.searcher.entry_count();
                 self.md_context = build_context(&self.loaded_files);
-                self.rag_index = RagIndex::new(&self.loaded_files);
+                self.rag_index = RagIndex::new(&self.loaded_files, &self.cwd);
                 self.query.clear();
                 self.results.clear();
                 self.selected = 0;
@@ -570,15 +576,27 @@ DOCUMENTS:
         }
     }
 
+    pub fn prepare_quick_search(&mut self) {
+        self.quick_sources = self.rag_index.search_chunks(&self.quick_query, 20);
+        self.quick_sources_selected = 0;
+    }
+
     pub fn build_quick_messages(&self) -> Vec<ChatMessage> {
-        let relevant_context = self.rag_index.search(&self.quick_query, 20);
+        let relevant_context: String = self.quick_sources.iter()
+            .map(|c| format!("[{}:{}] {}\n\n", c.file, c.line, c.content))
+            .collect();
         vec![
             ChatMessage {
                 role: "system".to_string(),
                 content: format!(
-                    r#"You are a direct assistant. Answer in 2-3 short sentences MAX.
-Be concise - the user will speak your answer out loud in a meeting.
-No greetings, no elaboration. Just the essential answer.
+                    r#"You are a technical assistant. Give a complete but speakable answer.
+
+Rules:
+- 4-6 sentences covering the key points
+- Use simple language that can be read aloud in a meeting
+- Include specific details (names, values, differences) from the context
+- No greetings, no markdown formatting, no bullet points
+- Write in a natural speaking flow
 
 RELEVANT CONTEXT:
 {}"#,
@@ -590,5 +608,31 @@ RELEVANT CONTEXT:
                 content: self.quick_query.clone(),
             },
         ]
+    }
+
+    pub fn toggle_quick_sources(&mut self) {
+        self.quick_sources_expanded = !self.quick_sources_expanded;
+    }
+
+    pub fn quick_sources_up(&mut self) {
+        if self.quick_sources_selected > 0 {
+            self.quick_sources_selected -= 1;
+        }
+    }
+
+    pub fn quick_sources_down(&mut self) {
+        if self.quick_sources_selected + 1 < self.quick_sources.len() {
+            self.quick_sources_selected += 1;
+        }
+    }
+
+    pub fn open_quick_source(&mut self) {
+        if let Some(chunk) = self.quick_sources.get(self.quick_sources_selected) {
+            let file_path = self.cwd.join(&chunk.file);
+            let _ = std::process::Command::new("nvim")
+                .arg(format!("+{}", chunk.line))
+                .arg(&file_path)
+                .status();
+        }
     }
 }

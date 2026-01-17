@@ -215,11 +215,17 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                         },
                         Mode::QuickAnswer => match key.code {
                             KeyCode::Esc if !app.quick_streaming => app.on_escape(),
+                            KeyCode::Tab => app.toggle_quick_sources(),
+                            KeyCode::Up if app.quick_sources_expanded => app.quick_sources_up(),
+                            KeyCode::Down if app.quick_sources_expanded => app.quick_sources_down(),
                             KeyCode::Enter => {
-                                if !app.quick_streaming
+                                if app.quick_sources_expanded && !app.quick_sources.is_empty() {
+                                    app.open_quick_source();
+                                } else if !app.quick_streaming
                                     && !app.quick_query.is_empty()
                                     && app.api_key.is_some()
                                 {
+                                    app.prepare_quick_search();
                                     let messages = app.build_quick_messages();
                                     let api_key = app.api_key.clone().unwrap();
                                     let new_tx = quick_tx.clone();

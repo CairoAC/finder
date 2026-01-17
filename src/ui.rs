@@ -833,13 +833,37 @@ fn draw_quick_input(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_quick_response(frame: &mut Frame, area: Rect, app: &App) {
+    let has_sources = !app.quick_sources.is_empty();
+    let show_sources = has_sources && !app.quick_streaming && !app.quick_response.is_empty();
+
+    let response_area;
+    let sources_area;
+
+    if show_sources {
+        let sources_height = if app.quick_sources_expanded {
+            (app.quick_sources.len().min(5) + 2) as u16
+        } else {
+            3
+        };
+        let chunks = Layout::vertical([
+            Constraint::Min(1),
+            Constraint::Length(sources_height),
+        ])
+        .split(area);
+        response_area = chunks[0];
+        sources_area = Some(chunks[1]);
+    } else {
+        response_area = area;
+        sources_area = None;
+    }
+
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(DIM))
         .padding(Padding::new(2, 2, 1, 1));
 
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
+    let inner = block.inner(response_area);
+    frame.render_widget(block, response_area);
 
     if app.api_key.is_none() {
         let paragraph = Paragraph::new(Span::styled(
@@ -868,6 +892,60 @@ fn draw_quick_response(frame: &mut Frame, area: Rect, app: &App) {
             .wrap(Wrap { trim: false });
         frame.render_widget(paragraph, inner);
     }
+
+    if let Some(src_area) = sources_area {
+        draw_quick_sources(frame, src_area, app);
+    }
+}
+
+fn draw_quick_sources(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::horizontal(1));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if app.quick_sources_expanded {
+        let items: Vec<ListItem> = app
+            .quick_sources
+            .iter()
+            .enumerate()
+            .take(5)
+            .map(|(idx, chunk)| {
+                let is_selected = idx == app.quick_sources_selected;
+                let marker = if is_selected { ">" } else { " " };
+                let marker_style = Style::default().fg(BLUE);
+
+                let file_style = if is_selected {
+                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::White)
+                };
+
+                let preview: String = chunk.content.chars().take(40).collect();
+                let suffix = if chunk.content.len() > 40 { "..." } else { "" };
+
+                ListItem::new(Line::from(vec![
+                    Span::styled(marker, marker_style),
+                    Span::styled(format!(" {}:{}", chunk.file, chunk.line), file_style),
+                    Span::styled(format!("  {}{}", preview, suffix), Style::default().fg(DIM)),
+                ]))
+            })
+            .collect();
+
+        let list = List::new(items);
+        frame.render_widget(list, inner);
+    } else {
+        let text = Line::from(vec![
+            Span::styled("Sources ", Style::default().fg(DIM)),
+            Span::styled(format!("({} chunks)", app.quick_sources.len()), Style::default().fg(BLUE)),
+            Span::styled("  [Tab] expand", Style::default().fg(DIM)),
+        ]);
+        let paragraph = Paragraph::new(text);
+        frame.render_widget(paragraph, inner);
+    }
 }
 
 fn draw_quick_footer(frame: &mut Frame, area: Rect, app: &App) {
@@ -885,10 +963,21 @@ fn draw_quick_footer(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled("[Ctrl+C]", Style::default().fg(DIM)),
             Span::styled(" cancel", Style::default().fg(DIM)),
         ]
+    } else if app.quick_sources_expanded {
+        vec![
+            Span::styled("[Enter]", Style::default().fg(BLUE)),
+            Span::styled(" open  ", Style::default().fg(DIM)),
+            Span::styled("[Tab]", Style::default().fg(BLUE)),
+            Span::styled(" collapse  ", Style::default().fg(DIM)),
+            Span::styled("[Esc]", Style::default().fg(BLUE)),
+            Span::styled(" back", Style::default().fg(DIM)),
+        ]
     } else {
         vec![
             Span::styled("[Enter]", Style::default().fg(BLUE)),
             Span::styled(" ask  ", Style::default().fg(DIM)),
+            Span::styled("[Tab]", Style::default().fg(BLUE)),
+            Span::styled(" sources  ", Style::default().fg(DIM)),
             Span::styled("[Esc]", Style::default().fg(BLUE)),
             Span::styled(" back", Style::default().fg(DIM)),
         ]

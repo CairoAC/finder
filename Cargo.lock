@@ -368,6 +368,7 @@ dependencies = [
  "dotenvy",
  "futures-util",
  "ignore",
+ "md5",
  "nucleo",
  "nucleo-matcher",
  "pulldown-cmark",
@@ -951,6 +952,12 @@ name = "lz4_flex"
 version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08ab2867e3eeeca90e844d1940eab391c9dc5228783db2ed999acbc0a9ed375a"
+
+[[package]]
+name = "md5"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
 
 [[package]]
 name = "measure_time"
