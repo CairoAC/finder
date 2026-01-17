@@ -58,6 +58,7 @@ pub struct App {
     pub quick_sources_selected: usize,
     pub status_message: Option<(String, std::time::Instant)>,
     pub quick_history: Vec<(String, String)>,
+    quick_pending_query: String,
 }
 
 impl App {
@@ -108,6 +109,7 @@ impl App {
             quick_sources_selected: 0,
             status_message: None,
             quick_history: Vec::new(),
+            quick_pending_query: String::new(),
         }
     }
 
@@ -562,6 +564,8 @@ DOCUMENTS:
         if self.quick_query.is_empty() || self.quick_streaming || self.api_key.is_none() {
             return;
         }
+        self.quick_pending_query = self.quick_query.clone();
+        self.quick_query.clear();
         self.quick_response.clear();
         self.quick_streaming = true;
     }
@@ -569,9 +573,10 @@ DOCUMENTS:
     pub fn append_quick_response(&mut self, text: &str) {
         if text == "\n[DONE]" {
             self.quick_streaming = false;
-            if !self.quick_query.is_empty() && !self.quick_response.is_empty() {
-                self.quick_history.push((self.quick_query.clone(), self.quick_response.clone()));
+            if !self.quick_pending_query.is_empty() && !self.quick_response.is_empty() {
+                self.quick_history.push((self.quick_pending_query.clone(), self.quick_response.clone()));
             }
+            self.quick_pending_query.clear();
         } else {
             self.quick_response.push_str(text);
         }
