@@ -4,7 +4,7 @@ use std::path::Path;
 use tokio::sync::mpsc;
 
 const API_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL: &str = "google/gemini-3-flash-preview";
+const MODEL: &str = "google/gemini-2.5-flash-lite";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
