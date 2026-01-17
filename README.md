@@ -45,7 +45,7 @@ f
 | `Ctrl+O` | Directory picker |
 | `Esc` | Quit |
 
-Mouse scroll and click also work.
+Select text with mouse to copy to clipboard (like tmux).
 
 ### Chat Mode
 
@@ -55,6 +55,7 @@ Press `?` to chat with your documents.
 |-----|--------|
 | Type | Write question |
 | `Enter` | Send |
+| `Up/Down` | Scroll response |
 | `Alt+c` | Browse citations |
 | `Ctrl+C` | Cancel stream |
 | `Esc` | Back to search |
@@ -109,6 +110,7 @@ echo 'OPENROUTER_API_KEY=sk-or-...' >> ~/.env
 
 - Rust 1.70+
 - Neovim
+- xclip (Linux) or clip.exe (WSL) for clipboard
 - OpenRouter API key (optional, for chat)
 
 ## License
