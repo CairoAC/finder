@@ -16,6 +16,8 @@ A CLI tool for searching and chatting with your markdown files.
 
 **Chat** - Ask questions about your documents using AI. All markdown files are loaded as context, and you can chat with Gemini Flash 3 with streaming responses. The AI includes citations to specific lines. Press `Alt+c` to browse and search citations with a preview pane.
 
+**Directory Picker** - Press `Ctrl+O` to navigate to a different directory without leaving the app. Fuzzy search through parent directories (3 levels up) and subdirectories (5 levels down). Preview directory contents before switching.
+
 ## Installation
 
 ```bash
@@ -45,6 +47,7 @@ f
 | `Up/Down` | Navigate |
 | `Enter` | Open in Neovim |
 | `?` | Chat mode |
+| `Ctrl+O` | Directory picker |
 | `Esc` | Quit |
 
 Mouse scroll and click also work.
@@ -71,6 +74,17 @@ Press `Alt+c` in chat mode to browse citations.
 | `Up/Down` | Navigate |
 | `Enter` | Open in Neovim |
 | `Esc` | Back to chat |
+
+### Directory Picker
+
+Press `Ctrl+O` to change directories.
+
+| Key | Action |
+|-----|--------|
+| Type | Filter directories |
+| `Up/Down` | Navigate |
+| `Enter` | Switch to directory |
+| `Esc` | Cancel |
 
 ## Chat Setup
 
