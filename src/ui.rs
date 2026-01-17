@@ -957,7 +957,17 @@ fn draw_quick_footer(frame: &mut Frame, area: Rect, app: &App) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let hints: Vec<Span> = if app.quick_streaming {
+    let status_active = app.status_message.as_ref().map_or(false, |(_, instant)| {
+        instant.elapsed().as_secs() < 3
+    });
+
+    let hints: Vec<Span> = if status_active {
+        let msg = app.status_message.as_ref().map(|(m, _)| m.as_str()).unwrap_or("");
+        vec![
+            Span::styled("✓ ", Style::default().fg(Color::Green)),
+            Span::styled(msg, Style::default().fg(Color::Green)),
+        ]
+    } else if app.quick_streaming {
         vec![
             Span::styled("streaming... ", Style::default().fg(BLUE)),
             Span::styled("[Ctrl+C]", Style::default().fg(DIM)),

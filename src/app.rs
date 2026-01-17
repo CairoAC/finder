@@ -56,6 +56,7 @@ pub struct App {
     pub quick_sources: Vec<RagChunk>,
     pub quick_sources_expanded: bool,
     pub quick_sources_selected: usize,
+    pub status_message: Option<(String, std::time::Instant)>,
 }
 
 impl App {
@@ -104,6 +105,7 @@ impl App {
             quick_sources: Vec::new(),
             quick_sources_expanded: false,
             quick_sources_selected: 0,
+            status_message: None,
         }
     }
 
@@ -583,6 +585,10 @@ DOCUMENTS:
         self.loaded_files = load_md_files(&self.cwd);
         self.rag_index = RagIndex::new(&self.loaded_files, &self.cwd);
         self.quick_sources.clear();
+        self.status_message = Some((
+            format!("Index rebuilt ({} files)", self.loaded_files.len()),
+            std::time::Instant::now(),
+        ));
     }
 
     pub fn prepare_quick_search(&mut self) {
