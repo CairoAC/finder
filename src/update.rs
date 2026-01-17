@@ -1,7 +1,7 @@
 use std::process::Command;
 
 const REPO_URL: &str = "https://github.com/CairoAC/finder.git";
-const CARGO_TOML_URL: &str = "https://raw.githubusercontent.com/CairoAC/finder/main/Cargo.toml";
+const CARGO_TOML_URL: &str = "https://raw.githubusercontent.com/CairoAC/finder/master/Cargo.toml";
 
 pub fn current_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
