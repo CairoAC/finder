@@ -57,6 +57,7 @@ pub struct App {
     pub quick_sources_expanded: bool,
     pub quick_sources_selected: usize,
     pub status_message: Option<(String, std::time::Instant)>,
+    pub quick_history: Vec<(String, String)>,
 }
 
 impl App {
@@ -106,6 +107,7 @@ impl App {
             quick_sources_expanded: false,
             quick_sources_selected: 0,
             status_message: None,
+            quick_history: Vec::new(),
         }
     }
 
@@ -339,6 +341,7 @@ impl App {
                 self.mode = Mode::Search;
                 self.quick_query.clear();
                 self.quick_response.clear();
+                self.quick_history.clear();
             }
         }
     }
@@ -566,6 +569,9 @@ DOCUMENTS:
     pub fn append_quick_response(&mut self, text: &str) {
         if text == "\n[DONE]" {
             self.quick_streaming = false;
+            if !self.quick_query.is_empty() && !self.quick_response.is_empty() {
+                self.quick_history.push((self.quick_query.clone(), self.quick_response.clone()));
+            }
         } else {
             self.quick_response.push_str(text);
         }
@@ -591,6 +597,17 @@ DOCUMENTS:
         ));
     }
 
+    pub fn new_quick_conversation(&mut self) {
+        self.quick_history.clear();
+        self.quick_query.clear();
+        self.quick_response.clear();
+        self.quick_sources.clear();
+        self.status_message = Some((
+            "New conversation".to_string(),
+            std::time::Instant::now(),
+        ));
+    }
+
     pub fn prepare_quick_search(&mut self) {
         self.quick_sources = self.rag_index.search_chunks(&self.quick_query, 20);
         self.quick_sources_selected = 0;
@@ -600,7 +617,8 @@ DOCUMENTS:
         let relevant_context: String = self.quick_sources.iter()
             .map(|c| format!("[{}:{}] {}\n\n", c.file, c.line, c.content))
             .collect();
-        vec![
+
+        let mut messages = vec![
             ChatMessage {
                 role: "system".to_string(),
                 content: format!(
@@ -618,11 +636,19 @@ RELEVANT CONTEXT:
                     relevant_context
                 ),
             },
-            ChatMessage {
-                role: "user".to_string(),
-                content: self.quick_query.clone(),
-            },
-        ]
+        ];
+
+        for (q, a) in &self.quick_history {
+            messages.push(ChatMessage { role: "user".to_string(), content: q.clone() });
+            messages.push(ChatMessage { role: "assistant".to_string(), content: a.clone() });
+        }
+
+        messages.push(ChatMessage {
+            role: "user".to_string(),
+            content: self.quick_query.clone(),
+        });
+
+        messages
     }
 
     pub fn toggle_quick_sources(&mut self) {

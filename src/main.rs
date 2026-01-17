@@ -252,6 +252,9 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                                     'r' if !app.quick_streaming => {
                                         app.rebuild_rag_index();
                                     }
+                                    'n' if !app.quick_streaming => {
+                                        app.new_quick_conversation();
+                                    }
                                     _ => {}
                                 }
                             }

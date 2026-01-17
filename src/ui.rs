@@ -982,6 +982,16 @@ fn draw_quick_footer(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled("[Esc]", Style::default().fg(BLUE)),
             Span::styled(" back", Style::default().fg(DIM)),
         ]
+    } else if !app.quick_history.is_empty() {
+        vec![
+            Span::styled(format!("follow-up ({})  ", app.quick_history.len()), Style::default().fg(Color::Yellow)),
+            Span::styled("[Enter]", Style::default().fg(BLUE)),
+            Span::styled(" ask  ", Style::default().fg(DIM)),
+            Span::styled("[Ctrl+N]", Style::default().fg(HIGHLIGHT)),
+            Span::styled(" new  ", Style::default().fg(DIM)),
+            Span::styled("[Esc]", Style::default().fg(BLUE)),
+            Span::styled(" back", Style::default().fg(DIM)),
+        ]
     } else {
         vec![
             Span::styled("[Enter]", Style::default().fg(BLUE)),

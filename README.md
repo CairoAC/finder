@@ -77,10 +77,11 @@ Type `@` followed by a question for fast answers.
 | Key | Action |
 |-----|--------|
 | Type | Write question |
-| `Enter` | Send |
+| `Enter` | Send (follow-ups remember context) |
 | `Tab` | Toggle sources |
 | `Up/Down` | Navigate sources (when expanded) |
 | `Enter` | Open source in Neovim (when expanded) |
+| `Ctrl+N` | New conversation (clears history) |
 | `Ctrl+R` | Rebuild RAG index (clears cache) |
 | `Ctrl+C` | Cancel stream |
 | `Esc` | Back to search |
