@@ -1,5 +1,5 @@
 use crate::chat::ChatMessage;
-use crate::search::{SearchEntry, Searcher};
+use crate::search::{build_context, load_md_files, LoadedFile, SearchEntry, Searcher};
 use ignore::WalkBuilder;
 use nucleo_matcher::{pattern::{CaseMatching, Normalization, Pattern}, Matcher, Utf32Str};
 use std::path::PathBuf;
@@ -10,6 +10,7 @@ pub enum Mode {
     Chat,
     Citations,
     DirectoryPicker,
+    QuickAnswer,
 }
 
 #[derive(Debug, Clone)]
@@ -40,20 +41,23 @@ pub struct App {
     pub citations_filtered: Vec<Citation>,
     pub citations_selected: usize,
     searcher: Searcher,
-    // Directory picker
+    loaded_files: Vec<LoadedFile>,
     pub dir_entries: Vec<PathBuf>,
     pub dir_filtered: Vec<PathBuf>,
     pub dir_query: String,
     pub dir_selected: usize,
     pub dir_scroll: usize,
     pub original_cwd: PathBuf,
+    pub quick_query: String,
+    pub quick_response: String,
+    pub quick_streaming: bool,
 }
 
 impl App {
     pub fn new(cwd: PathBuf) -> Self {
-        let searcher = Searcher::new(&cwd);
+        let loaded_files = load_md_files(&cwd);
+        let searcher = Searcher::from_files(&loaded_files);
         let entry_count = searcher.entry_count();
-        let md_context = crate::chat::load_context(&cwd);
         let api_key = crate::chat::find_api_key();
         let original_cwd = cwd.clone();
 
@@ -72,19 +76,29 @@ impl App {
             chat_response: String::new(),
             chat_streaming: false,
             chat_scroll: 0,
-            md_context,
+            md_context: String::new(),
             api_key,
             citations: Vec::new(),
             citations_query: String::new(),
             citations_filtered: Vec::new(),
             citations_selected: 0,
             searcher,
+            loaded_files,
             dir_entries: Vec::new(),
             dir_filtered: Vec::new(),
             dir_query: String::new(),
             dir_selected: 0,
             dir_scroll: 0,
             original_cwd,
+            quick_query: String::new(),
+            quick_response: String::new(),
+            quick_streaming: false,
+        }
+    }
+
+    pub fn ensure_context_loaded(&mut self) {
+        if self.md_context.is_empty() {
+            self.md_context = build_context(&self.loaded_files);
         }
     }
 
@@ -155,7 +169,13 @@ impl App {
         match self.mode {
             Mode::Search => {
                 if c == '?' {
+                    self.ensure_context_loaded();
                     self.mode = Mode::Chat;
+                } else if c == '@' && self.query.is_empty() {
+                    self.ensure_context_loaded();
+                    self.mode = Mode::QuickAnswer;
+                    self.quick_query.clear();
+                    self.quick_response.clear();
                 } else {
                     self.query.push(c);
                     self.update_search();
@@ -173,6 +193,11 @@ impl App {
             Mode::DirectoryPicker => {
                 self.dir_query.push(c);
                 self.filter_directories();
+            }
+            Mode::QuickAnswer => {
+                if !self.quick_streaming {
+                    self.quick_query.push(c);
+                }
             }
         }
     }
@@ -195,6 +220,15 @@ impl App {
             Mode::DirectoryPicker => {
                 self.dir_query.pop();
                 self.filter_directories();
+            }
+            Mode::QuickAnswer => {
+                if !self.quick_streaming {
+                    if self.quick_query.is_empty() {
+                        self.mode = Mode::Search;
+                    } else {
+                        self.quick_query.pop();
+                    }
+                }
             }
         }
     }
@@ -227,6 +261,7 @@ impl App {
                     }
                 }
             }
+            Mode::QuickAnswer => {}
         }
     }
 
@@ -258,6 +293,7 @@ impl App {
                     }
                 }
             }
+            Mode::QuickAnswer => {}
         }
     }
 
@@ -290,6 +326,14 @@ impl App {
                 self.dir_filtered.clear();
                 self.dir_selected = 0;
                 self.dir_scroll = 0;
+            }
+            Mode::QuickAnswer => {
+                if self.quick_streaming {
+                    return;
+                }
+                self.mode = Mode::Search;
+                self.quick_query.clear();
+                self.quick_response.clear();
             }
         }
     }
@@ -492,9 +536,10 @@ DOCUMENTS:
             if let Ok(canonical) = new_cwd.canonicalize() {
                 self.cwd = canonical.clone();
                 self.original_cwd = canonical;
-                self.searcher = Searcher::new(&self.cwd);
+                self.loaded_files = load_md_files(&self.cwd);
+                self.searcher = Searcher::from_files(&self.loaded_files);
                 self.entry_count = self.searcher.entry_count();
-                self.md_context = crate::chat::load_context(&self.cwd);
+                self.md_context.clear();
                 self.query.clear();
                 self.results.clear();
                 self.selected = 0;
@@ -502,5 +547,49 @@ DOCUMENTS:
             }
         }
         self.mode = Mode::Search;
+    }
+
+    pub fn start_quick_answer(&mut self) {
+        if self.quick_query.is_empty() || self.quick_streaming || self.api_key.is_none() {
+            return;
+        }
+        self.quick_response.clear();
+        self.quick_streaming = true;
+    }
+
+    pub fn append_quick_response(&mut self, text: &str) {
+        if text == "\n[DONE]" {
+            self.quick_streaming = false;
+        } else {
+            self.quick_response.push_str(text);
+        }
+    }
+
+    pub fn cancel_quick(&mut self) {
+        if self.quick_streaming {
+            self.quick_streaming = false;
+            self.quick_response.push_str("\n\n[cancelled]");
+        }
+    }
+
+    pub fn build_quick_messages(&self) -> Vec<ChatMessage> {
+        vec![
+            ChatMessage {
+                role: "system".to_string(),
+                content: format!(
+                    r#"You are a direct assistant. Answer in 2-3 short sentences MAX.
+Be concise - the user will speak your answer out loud in a meeting.
+No greetings, no elaboration. Just the essential answer.
+
+DOCUMENTS:
+{}"#,
+                    self.md_context
+                ),
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: self.quick_query.clone(),
+            },
+        ]
     }
 }

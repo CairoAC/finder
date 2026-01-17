@@ -73,12 +73,17 @@ fn main() -> io::Result<()> {
 
 async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<()> {
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+    let (quick_tx, mut quick_rx) = mpsc::unbounded_channel::<String>();
 
     loop {
         let visible_count = terminal.get_frame().area().height as usize / 3;
 
         while let Ok(chunk) = rx.try_recv() {
             app.append_response(&chunk);
+        }
+
+        while let Ok(chunk) = quick_rx.try_recv() {
+            app.append_quick_response(&chunk);
         }
 
         terminal.draw(|frame| {
@@ -205,6 +210,40 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                                     app.on_char(c);
                                 }
                             }
+                            _ => {}
+                        },
+                        Mode::QuickAnswer => match key.code {
+                            KeyCode::Esc if !app.quick_streaming => app.on_escape(),
+                            KeyCode::Enter => {
+                                if !app.quick_streaming
+                                    && !app.quick_query.is_empty()
+                                    && app.api_key.is_some()
+                                {
+                                    let messages = app.build_quick_messages();
+                                    let api_key = app.api_key.clone().unwrap();
+                                    let new_tx = quick_tx.clone();
+
+                                    app.start_quick_answer();
+
+                                    tokio::spawn(async move {
+                                        let _ =
+                                            chat::stream_chat(&api_key, messages, new_tx).await;
+                                    });
+                                }
+                            }
+                            KeyCode::Char(c)
+                                if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) =>
+                            {
+                                if c == 'c' {
+                                    if app.quick_streaming {
+                                        app.cancel_quick();
+                                    } else {
+                                        app.on_escape();
+                                    }
+                                }
+                            }
+                            KeyCode::Backspace if !app.quick_streaming => app.on_backspace(),
+                            KeyCode::Char(c) if !app.quick_streaming => app.on_char(c),
                             _ => {}
                         },
                     }

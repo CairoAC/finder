@@ -18,6 +18,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Mode::Chat => draw_chat(frame, app),
         Mode::Citations => draw_citations(frame, app),
         Mode::DirectoryPicker => draw_directory_picker(frame, app),
+        Mode::QuickAnswer => draw_quick_answer(frame, app),
     }
 }
 
@@ -92,6 +93,7 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
         Mode::Chat => " [CHAT]",
         Mode::Citations => " [CITATIONS]",
         Mode::DirectoryPicker => " [DIRECTORY]",
+        Mode::QuickAnswer => " [QUICK]",
     };
 
     let lines: Vec<Line> = vec![
@@ -789,6 +791,110 @@ fn draw_dir_footer(frame: &mut Frame, area: Rect) {
         Span::styled("[Ctrl+O]", Style::default().fg(HIGHLIGHT)),
         Span::styled(" change dir", Style::default().fg(DIM)),
     ];
+
+    let paragraph = Paragraph::new(Line::from(hints));
+    frame.render_widget(paragraph, inner);
+}
+
+fn draw_quick_answer(frame: &mut Frame, app: &App) {
+    let area = frame.area();
+    let input_height = calc_input_height(app.quick_query.len(), area.width);
+
+    let chunks = Layout::vertical([
+        Constraint::Length(5),
+        Constraint::Length(input_height),
+        Constraint::Min(1),
+        Constraint::Length(3),
+    ])
+    .split(area);
+
+    draw_header(frame, chunks[0], app);
+    draw_quick_input(frame, chunks[1], app);
+    draw_quick_response(frame, chunks[2], app);
+    draw_quick_footer(frame, chunks[3], app);
+}
+
+fn draw_quick_input(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::horizontal(1));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let prefix = Span::styled("@ ", Style::default().fg(HIGHLIGHT));
+    let query = Span::styled(&app.quick_query, Style::default().fg(Color::White));
+    let cursor = Span::styled("_", Style::default().fg(Color::White));
+
+    let line = Line::from(vec![prefix, query, cursor]);
+    let paragraph = Paragraph::new(line).wrap(Wrap { trim: false });
+    frame.render_widget(paragraph, inner);
+}
+
+fn draw_quick_response(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::new(2, 2, 1, 1));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if app.api_key.is_none() {
+        let paragraph = Paragraph::new(Span::styled(
+            "OPENROUTER_API_KEY not found",
+            Style::default().fg(Color::Red),
+        ));
+        frame.render_widget(paragraph, inner);
+        return;
+    }
+
+    let content = if app.quick_response.is_empty() && !app.quick_streaming {
+        "Press Enter to ask...".to_string()
+    } else if app.quick_streaming {
+        format!("{}|", app.quick_response)
+    } else {
+        app.quick_response.clone()
+    };
+
+    let is_placeholder = app.quick_response.is_empty() && !app.quick_streaming;
+
+    let paragraph = if is_placeholder {
+        Paragraph::new(content)
+            .style(Style::default().fg(DIM))
+            .wrap(Wrap { trim: false })
+    } else {
+        Paragraph::new(content)
+            .style(Style::default().fg(Color::White))
+            .wrap(Wrap { trim: false })
+    };
+    frame.render_widget(paragraph, inner);
+}
+
+fn draw_quick_footer(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(DIM))
+        .padding(Padding::horizontal(1));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let hints: Vec<Span> = if app.quick_streaming {
+        vec![
+            Span::styled("streaming... ", Style::default().fg(BLUE)),
+            Span::styled("[Ctrl+C]", Style::default().fg(DIM)),
+            Span::styled(" cancel", Style::default().fg(DIM)),
+        ]
+    } else {
+        vec![
+            Span::styled("[Enter]", Style::default().fg(BLUE)),
+            Span::styled(" ask  ", Style::default().fg(DIM)),
+            Span::styled("[Esc]", Style::default().fg(BLUE)),
+            Span::styled(" back", Style::default().fg(DIM)),
+        ]
+    };
 
     let paragraph = Paragraph::new(Line::from(hints));
     frame.render_widget(paragraph, inner);

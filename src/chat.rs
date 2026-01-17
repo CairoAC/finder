@@ -64,36 +64,6 @@ fn read_env_file(path: &Path) -> Option<String> {
     None
 }
 
-pub fn load_context(dir: &Path) -> String {
-    let mut context = String::new();
-
-    let walker = ignore::WalkBuilder::new(dir)
-        .hidden(false)
-        .git_ignore(true)
-        .build();
-
-    for entry in walker.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        if path.extension().is_some_and(|e| e == "md") {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                let name = path
-                    .strip_prefix(dir)
-                    .unwrap_or(path)
-                    .to_string_lossy();
-                context.push_str(&format!("\n--- {} ---\n", name));
-                for (i, line) in content.lines().enumerate() {
-                    context.push_str(&format!("[{}:{}] {}\n", name, i + 1, line));
-                }
-            }
-        }
-    }
-
-    context
-}
-
 pub async fn stream_chat(
     api_key: &str,
     messages: Vec<ChatMessage>,
