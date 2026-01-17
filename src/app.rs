@@ -576,6 +576,15 @@ DOCUMENTS:
         }
     }
 
+    pub fn rebuild_rag_index(&mut self) {
+        if let Some(cache_dir) = dirs::cache_dir() {
+            let _ = std::fs::remove_dir_all(cache_dir.join("finder"));
+        }
+        self.loaded_files = load_md_files(&self.cwd);
+        self.rag_index = RagIndex::new(&self.loaded_files, &self.cwd);
+        self.quick_sources.clear();
+    }
+
     pub fn prepare_quick_search(&mut self) {
         self.quick_sources = self.rag_index.search_chunks(&self.quick_query, 20);
         self.quick_sources_selected = 0;

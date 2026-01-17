@@ -241,12 +241,18 @@ async fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Resul
                             KeyCode::Char(c)
                                 if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) =>
                             {
-                                if c == 'c' {
-                                    if app.quick_streaming {
-                                        app.cancel_quick();
-                                    } else {
-                                        app.on_escape();
+                                match c {
+                                    'c' => {
+                                        if app.quick_streaming {
+                                            app.cancel_quick();
+                                        } else {
+                                            app.on_escape();
+                                        }
                                     }
+                                    'r' if !app.quick_streaming => {
+                                        app.rebuild_rag_index();
+                                    }
+                                    _ => {}
                                 }
                             }
                             KeyCode::Backspace if !app.quick_streaming => app.on_backspace(),

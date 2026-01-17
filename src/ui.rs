@@ -978,6 +978,8 @@ fn draw_quick_footer(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled(" ask  ", Style::default().fg(DIM)),
             Span::styled("[Tab]", Style::default().fg(BLUE)),
             Span::styled(" sources  ", Style::default().fg(DIM)),
+            Span::styled("[Ctrl+R]", Style::default().fg(HIGHLIGHT)),
+            Span::styled(" rebuild  ", Style::default().fg(DIM)),
             Span::styled("[Esc]", Style::default().fg(BLUE)),
             Span::styled(" back", Style::default().fg(DIM)),
         ]

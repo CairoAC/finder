@@ -81,6 +81,7 @@ Type `@` followed by a question for fast answers.
 | `Tab` | Toggle sources |
 | `Up/Down` | Navigate sources (when expanded) |
 | `Enter` | Open source in Neovim (when expanded) |
+| `Ctrl+R` | Rebuild RAG index (clears cache) |
 | `Ctrl+C` | Cancel stream |
 | `Esc` | Back to search |
 
