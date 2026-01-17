@@ -23,6 +23,7 @@ dotenvy = "0.15"
 futures-util = "0.3"
 regex = "1"
 pulldown-cmark = "0.13"
+tantivy = "0.22"
 
 [profile.release]
 lto = true

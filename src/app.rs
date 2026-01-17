@@ -1,4 +1,5 @@
 use crate::chat::ChatMessage;
+use crate::rag::RagIndex;
 use crate::search::{build_context, load_md_files, LoadedFile, SearchEntry, Searcher};
 use ignore::WalkBuilder;
 use nucleo_matcher::{pattern::{CaseMatching, Normalization, Pattern}, Matcher, Utf32Str};
@@ -42,6 +43,7 @@ pub struct App {
     pub citations_selected: usize,
     searcher: Searcher,
     loaded_files: Vec<LoadedFile>,
+    rag_index: RagIndex,
     pub dir_entries: Vec<PathBuf>,
     pub dir_filtered: Vec<PathBuf>,
     pub dir_query: String,
@@ -59,6 +61,7 @@ impl App {
         let searcher = Searcher::from_files(&loaded_files);
         let entry_count = searcher.entry_count();
         let md_context = build_context(&loaded_files);
+        let rag_index = RagIndex::new(&loaded_files);
         let api_key = crate::chat::find_api_key();
         let original_cwd = cwd.clone();
 
@@ -85,6 +88,7 @@ impl App {
             citations_selected: 0,
             searcher,
             loaded_files,
+            rag_index,
             dir_entries: Vec::new(),
             dir_filtered: Vec::new(),
             dir_query: String::new(),
@@ -533,6 +537,7 @@ DOCUMENTS:
                 self.searcher = Searcher::from_files(&self.loaded_files);
                 self.entry_count = self.searcher.entry_count();
                 self.md_context = build_context(&self.loaded_files);
+                self.rag_index = RagIndex::new(&self.loaded_files);
                 self.query.clear();
                 self.results.clear();
                 self.selected = 0;
@@ -566,6 +571,7 @@ DOCUMENTS:
     }
 
     pub fn build_quick_messages(&self) -> Vec<ChatMessage> {
+        let relevant_context = self.rag_index.search(&self.quick_query, 20);
         vec![
             ChatMessage {
                 role: "system".to_string(),
@@ -574,9 +580,9 @@ DOCUMENTS:
 Be concise - the user will speak your answer out loud in a meeting.
 No greetings, no elaboration. Just the essential answer.
 
-DOCUMENTS:
+RELEVANT CONTEXT:
 {}"#,
-                    self.md_context
+                    relevant_context
                 ),
             },
             ChatMessage {

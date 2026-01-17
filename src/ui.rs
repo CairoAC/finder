@@ -850,26 +850,24 @@ fn draw_quick_response(frame: &mut Frame, area: Rect, app: &App) {
         return;
     }
 
-    let content = if app.quick_response.is_empty() && !app.quick_streaming {
-        "Press Enter to ask...".to_string()
-    } else if app.quick_streaming {
-        format!("{}|", app.quick_response)
-    } else {
-        app.quick_response.clone()
-    };
-
     let is_placeholder = app.quick_response.is_empty() && !app.quick_streaming;
 
-    let paragraph = if is_placeholder {
-        Paragraph::new(content)
+    if is_placeholder {
+        let paragraph = Paragraph::new("Press Enter to ask...")
             .style(Style::default().fg(DIM))
-            .wrap(Wrap { trim: false })
+            .wrap(Wrap { trim: false });
+        frame.render_widget(paragraph, inner);
     } else {
-        Paragraph::new(content)
-            .style(Style::default().fg(Color::White))
-            .wrap(Wrap { trim: false })
-    };
-    frame.render_widget(paragraph, inner);
+        let content = if app.quick_streaming {
+            format!("{}|", app.quick_response)
+        } else {
+            app.quick_response.clone()
+        };
+        let markdown_text = crate::markdown::render(&content);
+        let paragraph = Paragraph::new(markdown_text)
+            .wrap(Wrap { trim: false });
+        frame.render_widget(paragraph, inner);
+    }
 }
 
 fn draw_quick_footer(frame: &mut Frame, area: Rect, app: &App) {

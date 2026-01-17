@@ -2,6 +2,7 @@ mod app;
 mod chat;
 mod compass;
 mod markdown;
+mod rag;
 mod search;
 mod ui;
 mod update;
